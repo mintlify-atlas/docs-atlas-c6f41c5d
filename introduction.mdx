@@ -1,0 +1,143 @@
+---
+title: Introduction to MadelineProto
+description: An async PHP client API for the Telegram MTProto protocol that lets you build powerful bots and userbots
+---
+
+# Welcome to MadelineProto
+
+MadelineProto is a **fully async PHP library** that allows you to interact with Telegram's MTProto API directly - without the limitations of the Bot API. Build powerful bots, userbots, and automation tools with the same capabilities as official Telegram clients.
+
+<Note>
+**Approved by Telegram!** MadelineProto is officially recognized and trusted by Telegram.
+</Note>
+
+## Why MadelineProto?
+
+MadelineProto gives you direct access to Telegram's MTProto protocol, enabling capabilities that go far beyond the standard Bot API:
+
+<CardGroup cols={2}>
+  <Card title="True MTProto Access" icon="bolt">
+    Communicate directly with Telegram's servers using the same protocol as official apps - no Bot API limitations
+  </Card>
+  
+  <Card title="Fully Async Architecture" icon="rocket">
+    Built on AMPHP for incredible speed and parallel processing. Handle thousands of operations simultaneously
+  </Card>
+  
+  <Card title="User & Bot Support" icon="users">
+    Login as a user with phone number, bot with token, or even via QR code. Build userbots and bots with the same codebase
+  </Card>
+  
+  <Card title="Advanced Features" icon="star">
+    VoIP calls, secret chats, Stories, 4GB file uploads, custom filters, plugins, and much more
+  </Card>
+</CardGroup>
+
+## What Can You Build?
+
+<CardGroup cols={2}>
+  <Card title="Powerful Bots" icon="robot" href="/quickstart">
+    Create feature-rich Telegram bots with event handlers, filters, and plugins
+  </Card>
+  
+  <Card title="File Management" icon="file">
+    Upload and download files up to 4GB with parallel processing and progress tracking
+  </Card>
+  
+  <Card title="VoIP Integration" icon="phone">
+    Make and receive Telegram voice calls programmatically with audio streaming
+  </Card>
+  
+  <Card title="Secret Chats" icon="lock">
+    Work with end-to-end encrypted secret chats with full MTProto support
+  </Card>
+</CardGroup>
+
+## Key Features
+
+- **Full MTProto API Access**: Every method available in official Telegram apps
+- **Async/Await**: Powered by AMPHP v3 and PHP fibers for non-blocking operations  
+- **Event-Driven Architecture**: Handle updates with filters, attributes, and plugins
+- **Database Support**: Optional MySQL, PostgreSQL, or Redis backend for reduced RAM usage
+- **File Operations**: Upload/download files up to 4GB with bot API file ID support
+- **Prometheus Metrics**: Built-in monitoring and metrics collection
+- **Docker Ready**: Official Docker images for amd64, arm64, and riscv64
+
+## Quick Example
+
+Here's how simple it is to create a bot that responds to messages:
+
+```php
+<?php
+
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\SimpleEventHandler;
+
+if (!file_exists('madeline.php')) {
+    copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+}
+require 'madeline.php';
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void
+    {
+        $message->reply("Hello from MadelineProto!");
+    }
+}
+
+MyBot::startAndLoop('bot.madeline');
+```
+
+## Real-World Examples
+
+These open-source projects showcase MadelineProto's capabilities:
+
+- **[@tgstories_dl_bot](https://t.me/tgstories_dl_bot)** - Download any Telegram Story
+- **[magnaluna webradio](https://magna.madelineproto.xyz)** - Full-featured VoIP webradio
+- **[downloadRenameBot](https://github.com/danog/downloadRenameBot)** - Download and rename files with parallel processing
+- **[pipesbot](https://github.com/danog/pipesbot)** - Use inline bots via a userbot
+
+## Core Components
+
+MadelineProto's architecture is built on standalone, reusable components:
+
+- [danog/async-orm](https://github.com/danog/AsyncOrm) - Async ORM for data persistence
+- [danog/telegram-entities](https://github.com/danog/telegram-entities) - Work with Telegram styled text
+- [danog/loop](https://github.com/danog/loop) - Actor model abstraction for AMPHP
+- [danog/better-prometheus](https://github.com/danog/better-prometheus) - Prometheus metrics
+- [danog/ipc](https://github.com/danog/ipc) - Async IPC for multi-process bots
+
+## Ready to Start?
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="play" href="/quickstart">
+    Build your first bot in under 5 minutes
+  </Card>
+  
+  <Card title="Installation" icon="download" href="/installation">
+    Install via Composer or PHAR
+  </Card>
+  
+  <Card title="Requirements" icon="list-check" href="/requirements">
+    Check system requirements and PHP extensions
+  </Card>
+  
+  <Card title="API Documentation" icon="book">
+    Explore the complete API reference
+  </Card>
+</CardGroup>
+
+## Community & Support
+
+- **Official Channel**: [@MadelineProto](https://t.me/MadelineProto)
+- **Support Group**: [Join here](https://t.me/pwrtelegramgroup)  
+- **Creator**: [Daniil Gentili](https://daniil.it)
+- **License**: AGPL-3.0
+
+<Warning>
+MadelineProto requires **PHP 8.2 or higher** (64-bit). Make sure your environment meets the [requirements](/requirements) before getting started.
+</Warning>

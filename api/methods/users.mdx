@@ -1,0 +1,192 @@
+---
+title: User Methods
+description: Methods for retrieving and managing user information
+---
+
+# User Methods
+
+The `users` namespace provides methods for working with users in Telegram.
+
+## Accessing User Methods
+
+```php
+// In EventHandler
+$userInfo = $this->users->getFullUser(['id' => $userId]);
+
+// In API instance
+$userInfo = $MadelineProto->users->getFullUser(['id' => $userId]);
+```
+
+## Getting User Information
+
+### getFullUser
+
+Get full information about a user.
+
+<ParamField path="id" type="string|int" required>
+  User ID, username, or user object
+</ParamField>
+
+**Returns:** Full user information including:
+- Basic profile data (name, username, phone)
+- Bio and about text
+- Profile photo
+- Privacy settings
+- Verification status
+- Premium status
+
+```php
+$user = $this->users->getFullUser(['id' => '@username']);
+
+echo "Name: " . $user['users'][0]['first_name'] . "\n";
+echo "Username: @" . $user['users'][0]['username'] . "\n";
+echo "Bio: " . $user['full_user']['about'] . "\n";
+```
+
+## Helper Methods
+
+MadelineProto provides several helper methods for user information through the API class:
+
+### getInfo
+
+Get basic user information (lightweight).
+
+```php
+$info = $this->getInfo($peer);
+
+// Returns:
+// - 'type' => 'user' | 'bot' | 'chat' | 'supergroup' | 'channel'
+// - 'id' => numeric ID
+// - 'user_id' => Telegram user ID
+// - 'first_name', 'last_name', 'username'
+// - 'bot' => true/false
+```
+
+<Note>
+This method is faster than `getFullUser` for basic information.
+</Note>
+
+### getSelf
+
+Get information about the currently logged-in user.
+
+```php
+$me = $this->getSelf();
+
+if ($me['bot']) {
+    echo "Logged in as bot: @" . $me['username'];
+} else {
+    echo "Logged in as user: " . $me['first_name'];
+}
+```
+
+### getId
+
+Extract the numeric user ID from various formats.
+
+```php
+// From username
+$id = $this->getId('@username');
+
+// From user object
+$id = $this->getId($user);
+
+// From bot API style ID
+$id = $this->getId(-1001234567890);
+```
+
+## User Status
+
+### Checking Online Status
+
+```php
+$fullUser = $this->users->getFullUser(['id' => $userId]);
+$status = $fullUser['users'][0]['status'];
+
+match ($status['_']) {
+    'userStatusOnline' => "Online until " . date('H:i', $status['expires']),
+    'userStatusOffline' => "Last seen " . date('Y-m-d H:i', $status['was_online']),
+    'userStatusRecently' => "Last seen recently",
+    'userStatusLastWeek' => "Last seen last week",
+    'userStatusLastMonth' => "Last seen last month",
+    default => "Unknown status"
+};
+```
+
+## User Profile Photos
+
+### Getting Profile Photos
+
+```php
+$photos = $this->photos->getUserPhotos([
+    'user_id' => $userId,
+    'offset' => 0,
+    'max_id' => 0,
+    'limit' => 10
+]);
+
+foreach ($photos['photos'] as $photo) {
+    // Download profile photo
+    $this->downloadToDir($photo, '/path/to/dir/');
+}
+```
+
+## Common Use Cases
+
+### Check if User is Bot
+
+```php
+if ($this->isBot($peer)) {
+    echo "This is a bot account";
+}
+```
+
+### Get User's Username
+
+```php
+$info = $this->getInfo($userId);
+$username = $info['username'] ?? null;
+
+if ($username) {
+    echo "Username: @$username";
+} else {
+    echo "User has no username";
+}
+```
+
+### Check Premium Status
+
+```php
+$fullUser = $this->users->getFullUser(['id' => $userId]);
+$isPremium = $fullUser['users'][0]['premium'] ?? false;
+
+if ($isPremium) {
+    echo "This user has Telegram Premium";
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Cache user information">
+    Don't call `getFullUser` repeatedly for the same user. Cache the results and refresh periodically.
+  </Accordion>
+
+  <Accordion title="Use getInfo for lightweight checks">
+    When you only need basic information like username or ID, use `getInfo()` instead of `getFullUser()`.
+  </Accordion>
+
+  <Accordion title="Handle privacy restrictions">
+    Some users may have restricted their profile information. Always check if fields exist before accessing them.
+  </Accordion>
+
+  <Accordion title="Respect rate limits">
+    Avoid making too many user lookup requests in quick succession to prevent flood waits.
+  </Accordion>
+</AccordionGroup>
+
+## See Also
+
+- [Chat Info Guide](/guides/chat-info) - Working with chat and channel information
+- [Error Handling](/guides/error-handling) - Handling user lookup errors
+- [Flood Wait](/guides/flood-wait) - Managing rate limits

@@ -1,0 +1,305 @@
+---
+title: File Download Example
+description: Download Telegram stories, media files, and generate download links for files up to 4GB
+---
+
+This example shows how to download media files, including protected Telegram stories. Based on `tgstories_dl_bot.php`.
+
+## Telegram Stories Downloader
+
+This bot downloads all stories from a user, including pinned and protected stories.
+
+```php
+<?php declare(strict_types=1);
+
+use danog\MadelineProto\API;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\ParseMode;
+use danog\MadelineProto\SimpleEventHandler;
+
+if (class_exists(API::class)) {
+} elseif (file_exists('vendor/autoload.php')) {
+    require_once 'vendor/autoload.php';
+} else {
+    if (!file_exists('madeline.php')) {
+        copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+    }
+    require_once 'madeline.php';
+}
+
+// Login as a user
+$u = new API('stories_user.madeline');
+if (!$u->getSelf()) {
+    if (!$_GET) {
+        $u->echo("Please login as a user!");
+    }
+    $u->start();
+}
+if (!$u->isSelfUser()) {
+    throw new AssertionError("You must login as a user! Please delete the user.madeline folder to continue.");
+}
+unset($u);
+
+final class StoriesEventHandler extends SimpleEventHandler
+{
+    private const HELP = "Telegram stories downloader bot, powered by @MadelineProto!\n\nUsage:\n/dlStories @danogentili - Download all the stories of a @username!\n\n[Source code](https://github.com/danog/MadelineProto/blob/v8/examples/tgstories_dl_bot.php) powered by @MadelineProto";
+    private const ADMIN = "@danogentili";
+
+    private API $userInstance;
+    
+    public function onStart(): void
+    {
+        $this->echo("Please login as a user!");
+        $this->userInstance = new API('stories_user.madeline');
+    }
+
+    public function getReportPeers()
+    {
+        return self::ADMIN;
+    }
+
+    #[FilterCommand('start')]
+    public function startCmd(Incoming&Message $message): void
+    {
+        $message->reply(self::HELP, parseMode: ParseMode::MARKDOWN);
+    }
+
+    /**
+     * Downloads all telegram stories of a user (including protected ones).
+     */
+    #[FilterCommand('dlStories')]
+    public function dlStoriesCommand(Message $message): void
+    {
+        if (!$message->commandArgs) {
+            $message->reply("You must specify the @username or the Telegram ID of a user to download their stories!");
+            return;
+        }
+
+        $stories = $this->userInstance->stories->getPeerStories(peer: $message->commandArgs[0])['stories']['stories'];
+        $last = null;
+        do {
+            $res = $this->userInstance->stories->getPinnedStories(peer: $message->commandArgs[0], offset_id: $last)['stories'];
+            $last = $res ? end($res)['id'] : null;
+            $stories = array_merge($res, $stories);
+        } while ($last);
+        
+        // Skip deleted stories
+        $stories = array_filter($stories, static fn (array $s): bool => $s['_'] === 'storyItem');
+        // Skip protected stories
+        $stories = array_filter($stories, static fn (array $s): bool => !$s['noforwards']);
+        // Sort by date
+        usort($stories, static fn ($a, $b) => $a['date'] <=> $b['date']);
+
+        $message = $message->reply("Total stories: ".count($stories));
+        foreach (array_chunk($stories, 10) as $sub) {
+            $result = '';
+            foreach ($sub as $story) {
+                $cur = "- ID {$story['id']}, posted ".date(DATE_RFC850, $story['date']);
+                if (isset($story['caption'])) {
+                    $cur .= ', "'.self::markdownEscape($story['caption']).'"';
+                }
+                $result .= "$cur; [click here to download »]({$this->userInstance->getDownloadLink($story)})\n";
+            }
+            $message = $message->reply($result, parseMode: ParseMode::MARKDOWN);
+        }
+    }
+}
+
+$token = '<token>';
+
+StoriesEventHandler::startAndLoopBot('stories.madeline', $token);
+```
+
+## Key Concepts
+
+### Multi-Account Setup
+
+This bot uses two accounts:
+- A bot account for the interface
+- A user account to access stories
+
+```php
+private API $userInstance;
+
+public function onStart(): void
+{
+    $this->userInstance = new API('stories_user.madeline');
+}
+```
+
+<Note>
+Stories can only be accessed by user accounts, not bots. This example uses a bot as the interface and a user account for API calls.
+</Note>
+
+### Fetching Stories
+
+```php
+// Get current stories
+$stories = $this->userInstance->stories->getPeerStories(
+    peer: $message->commandArgs[0]
+)['stories']['stories'];
+
+// Get pinned stories
+$last = null;
+do {
+    $res = $this->userInstance->stories->getPinnedStories(
+        peer: $message->commandArgs[0], 
+        offset_id: $last
+    )['stories'];
+    $last = $res ? end($res)['id'] : null;
+    $stories = array_merge($res, $stories);
+} while ($last);
+```
+
+### Filtering Stories
+
+```php
+// Skip deleted stories
+$stories = array_filter($stories, static fn (array $s): bool => $s['_'] === 'storyItem');
+
+// Skip protected stories (no forwarding allowed)
+$stories = array_filter($stories, static fn (array $s): bool => !$s['noforwards']);
+
+// Sort by date
+usort($stories, static fn ($a, $b) => $a['date'] <=> $b['date']);
+```
+
+<Tip>
+Protected stories have `noforwards` set to true and cannot be downloaded.
+</Tip>
+
+### Generating Download Links
+
+```php
+$downloadLink = $this->userInstance->getDownloadLink($story);
+```
+
+<Note>
+The bot must be started via web for download links to work, or you must configure a download script URL in settings.
+</Note>
+
+## Simple Download Link Command
+
+From `bot.php`, here's a simpler example for getting download links:
+
+```php
+#[FilterCommand('dl')]
+public function downloadLink(Incoming&Message $message): void
+{
+    $reply = $message->getReply(Message::class);
+    if (!$reply?->media) {
+        $message->reply("This command must reply to a media message!");
+        return;
+    }
+    $reply->reply("Download link: ".$reply->media->getDownloadLink());
+}
+```
+
+### Usage
+
+1. Reply to any media message with `/dl`
+2. Get a direct download link
+
+<Tip>
+Download links work for files up to 4GB!
+</Tip>
+
+## Downloading to Directory
+
+From `secret_bot.php`:
+
+```php
+if ($update->media) {
+    $path = $update->media->downloadToDir('/tmp');
+    $update->reply($path);
+}
+```
+
+### Download Methods
+
+```php
+// Download to specific directory
+$path = $media->downloadToDir('/tmp');
+
+// Download to specific file
+$path = $media->downloadToFile('/tmp/myfile.jpg');
+
+// Get download link
+$link = $media->getDownloadLink();
+
+// Get file stream
+$stream = $media->getStream();
+```
+
+## Broadcasting with Progress
+
+Track download/upload progress during broadcasts:
+
+```php
+private int $lastLog = 0;
+
+public function onUpdateBroadcastProgress(Progress $progress): void
+{
+    if (time() - $this->lastLog > 5 || $progress->status === Status::FINISHED) {
+        $this->lastLog = time();
+        $this->sendMessageToAdmins((string) $progress);
+    }
+}
+```
+
+## Chunked Output
+
+For large lists, send messages in chunks:
+
+```php
+$message = $message->reply("Total stories: ".count($stories));
+
+foreach (array_chunk($stories, 10) as $sub) {
+    $result = '';
+    foreach ($sub as $story) {
+        $result .= "Story info...\n";
+    }
+    $message = $message->reply($result, parseMode: ParseMode::MARKDOWN);
+}
+```
+
+<Tip>
+Replying to the previous message creates a thread-like structure.
+</Tip>
+
+## Web Server Configuration
+
+For download links to work via CLI, configure settings:
+
+```php
+$settings = new Settings;
+$settings->getFiles()->setDownloadReportUrl('https://yourserver.com/download.php');
+```
+
+See [Files documentation](https://docs.madelineproto.xyz/docs/FILES.html#getting-a-download-link-cli-bots) for details.
+
+## Error Handling
+
+```php
+if (!$message->commandArgs) {
+    $message->reply("You must specify the @username or Telegram ID!");
+    return;
+}
+
+try {
+    $stories = $this->userInstance->stories->getPeerStories(
+        peer: $message->commandArgs[0]
+    );
+} catch (\Exception $e) {
+    $message->reply("Error fetching stories: " . $e->getMessage());
+    return;
+}
+```
+
+## Next Steps
+
+- See [Broadcasting Example](/examples/broadcasting) for mass sending
+- Check out [Full Bot Example](/examples/full-bot) for more features
+- Learn about [Secret Chats](/examples/secret-bot) for encrypted transfers

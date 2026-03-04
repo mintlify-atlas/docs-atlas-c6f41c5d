@@ -1,0 +1,549 @@
+---
+title: VoIP Calls
+description: Make and receive Telegram voice calls with audio streaming using MadelineProto
+---
+
+MadelineProto provides full support for Telegram's VoIP (Voice over IP) calls, allowing you to make and receive voice calls, play audio files, and even stream audio content.
+
+## VoIP Class Overview
+
+The `VoIP` class represents a Telegram voice call:
+
+```php
+use danog\MadelineProto\VoIP;
+use danog\MadelineProto\VoIP\CallState;
+use danog\MadelineProto\VoIP\DiscardReason;
+```
+
+### VoIP Properties
+
+```php
+$call->callID;      // int - Phone call ID
+$call->outgoing;    // bool - Whether call is outgoing
+$call->otherID;     // int - ID of other user in call
+$call->date;        // int - When call was created
+```
+
+## Making Calls
+
+### Request a Call
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\RemoteUrl;
+use danog\MadelineProto\LocalFile;
+
+class MyBot extends SimpleEventHandler
+{
+    #[FilterCommand('call')]
+    public function makeCall(Message $message): void
+    {
+        // Request a call to a user
+        $call = $this->requestCall($message->senderId);
+        
+        // Play audio file
+        $call->play(new RemoteUrl('http://example.com/audio.mp3'));
+        
+        $message->reply("Calling user...");
+    }
+}
+```
+
+### Play Audio from Local File
+
+```php
+#[FilterCommand('call')]
+public function callWithAudio(Message $message): void
+{
+    $call = $this->requestCall($message->senderId);
+    
+    // Play local audio file
+    $call->play(new LocalFile('/path/to/music.mp3'));
+}
+```
+
+### Play from Stream
+
+```php
+use Amp\ByteStream\ReadableStream;
+
+public function playStream(int $userId, ReadableStream $stream): void
+{
+    $call = $this->requestCall($userId);
+    $call->play($stream);
+}
+```
+
+## Accepting Calls
+
+Handle incoming calls using event handlers:
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+#[Handler]
+public function handleIncomingCall(Incoming&VoIP $call): void
+{
+    $this->logger("Incoming call from {$call->otherID}");
+    
+    // Accept the call
+    $call->accept();
+    
+    // Play audio
+    $call->play(new RemoteUrl('http://example.com/greeting.mp3'));
+}
+```
+
+### Accept and Play Multiple Files
+
+```php
+#[Handler]
+public function acceptCall(Incoming&VoIP $call): void
+{
+    $call->accept()
+        ->play(new LocalFile('greeting.mp3'))
+        ->then(new LocalFile('music.mp3'))
+        ->then(new LocalFile('goodbye.mp3'));
+}
+```
+
+## Playing Audio
+
+### Play Single File
+
+```php
+public function playAudio(VoIP $call): void
+{
+    // Play audio file
+    $call->play(new LocalFile('audio.mp3'));
+}
+```
+
+### Chain Multiple Files
+
+```php
+public function playPlaylist(VoIP $call): void
+{
+    $call->play(new LocalFile('track1.mp3'))
+        ->then(new LocalFile('track2.mp3'))
+        ->then(new LocalFile('track3.mp3'));
+}
+```
+
+### Play on Hold Music
+
+```php
+public function setHoldMusic(VoIP $call): void
+{
+    // Music to play when call is on hold
+    $call->playOnHold(
+        new LocalFile('hold1.mp3'),
+        new LocalFile('hold2.mp3'),
+        new LocalFile('hold3.mp3')
+    );
+}
+```
+
+## Playback Control
+
+### Pause and Resume
+
+```php
+public function controlPlayback(VoIP $call): void
+{
+    // Start playing
+    $call->play(new LocalFile('long-audio.mp3'));
+    
+    // Pause playback
+    $call->pause();
+    
+    // Check if paused
+    if ($call->isPaused()) {
+        $this->logger("Playback is paused");
+    }
+    
+    // Resume playback
+    $call->resume();
+}
+```
+
+### Skip to Next Track
+
+```php
+public function skipTrack(VoIP $call): void
+{
+    // Skip to next file in playlist
+    $call->skip();
+}
+```
+
+### Stop Playback
+
+```php
+public function stopPlayback(VoIP $call): void
+{
+    // Stop all playback and clear playlists
+    $call->stop();
+}
+```
+
+## Recording Audio
+
+### Set Output Stream
+
+```php
+use danog\MadelineProto\LocalFile;
+
+public function recordCall(VoIP $call): void
+{
+    // Record incoming audio to file (OGG OPUS format)
+    $call->setOutput(new LocalFile('/tmp/recording.ogg'));
+}
+```
+
+### Record to Stream
+
+```php
+use Amp\ByteStream\WritableStream;
+
+public function recordToStream(VoIP $call, WritableStream $output): void
+{
+    // Write incoming OPUS packets to stream
+    $call->setOutput($output);
+}
+```
+
+## Call Management
+
+### Get Call State
+
+```php
+use danog\MadelineProto\VoIP\CallState;
+
+public function checkCallState(VoIP $call): void
+{
+    $state = $call->getCallState();
+    
+    match($state) {
+        CallState::WAITING_INCOMING => $this->logger("Waiting for call"),
+        CallState::WAITING_OUTGOING => $this->logger("Ringing..."),
+        CallState::ESTABLISHED => $this->logger("Call in progress"),
+        CallState::ENDED => $this->logger("Call ended"),
+        default => $this->logger("Unknown state")
+    };
+}
+```
+
+### Get Current Playing File
+
+```php
+public function getCurrentTrack(VoIP $call): void
+{
+    $current = $call->getCurrent();
+    
+    if ($current instanceof LocalFile) {
+        $this->logger("Playing: " . $current->file);
+    } elseif ($current instanceof RemoteUrl) {
+        $this->logger("Playing: " . $current->url);
+    } elseif (is_string($current)) {
+        $this->logger("Playing stream: $current");
+    } else {
+        $this->logger("Nothing playing");
+    }
+}
+```
+
+### Get Call Verification Emojis
+
+```php
+public function showVerification(VoIP $call): void
+{
+    // Get 4 verification emojis
+    $emojis = $call->getVisualization();
+    
+    if ($emojis) {
+        [$e1, $e2, $e3, $e4] = $emojis;
+        $this->logger("Verify: $e1 $e2 $e3 $e4");
+    }
+}
+```
+
+### Discard Call
+
+```php
+use danog\MadelineProto\VoIP\DiscardReason;
+
+public function endCall(VoIP $call): void
+{
+    // Hang up
+    $call->discard(DiscardReason::HANGUP);
+    
+    // Hang up with rating
+    $call->discard(
+        reason: DiscardReason::HANGUP,
+        rating: 5,           // 1-5 stars
+        comment: "Great call quality!"
+    );
+}
+```
+
+### Discard Reasons
+
+```php
+use danog\MadelineProto\VoIP\DiscardReason;
+
+// Available discard reasons:
+DiscardReason::HANGUP;          // Normal hangup
+DiscardReason::MISSED;          // Missed call
+DiscardReason::DISCONNECT;      // Disconnected
+DiscardReason::BUSY;            // User busy
+```
+
+## Advanced Examples
+
+### Voice Message Bot
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\HasAudio;
+use danog\MadelineProto\EventHandler\Message\PrivateMessage;
+
+// Play incoming audio messages in a call
+#[Handler]
+public function playAudioMessage(Incoming&PrivateMessage&HasAudio $message): void
+{
+    // Request call to sender
+    $call = $this->requestCall($message->senderId);
+    
+    // Play the audio from the message
+    $call->play($message->media->getStream());
+}
+```
+
+### Music Streaming Bot
+
+```php
+class MusicBot extends SimpleEventHandler
+{
+    private array $playlists = [];
+    
+    #[FilterCommand('play')]
+    public function playMusic(Message $message): void
+    {
+        $userId = $message->senderId;
+        
+        // Create or get existing call
+        $call = $this->requestCall($userId);
+        
+        // Play playlist
+        $call->play(new RemoteUrl('https://stream.example.com/track1.mp3'))
+            ->then(new RemoteUrl('https://stream.example.com/track2.mp3'))
+            ->then(new RemoteUrl('https://stream.example.com/track3.mp3'));
+            
+        $message->reply("🎵 Playing music...");
+    }
+    
+    #[FilterCommand('pause')]
+    public function pauseMusic(Message $message): void
+    {
+        $call = $this->getActiveCall($message->senderId);
+        if ($call) {
+            $call->pause();
+            $message->reply("⏸ Paused");
+        }
+    }
+    
+    #[FilterCommand('resume')]
+    public function resumeMusic(Message $message): void
+    {
+        $call = $this->getActiveCall($message->senderId);
+        if ($call) {
+            $call->resume();
+            $message->reply("▶️ Resumed");
+        }
+    }
+    
+    #[FilterCommand('skip')]
+    public function skipTrack(Message $message): void
+    {
+        $call = $this->getActiveCall($message->senderId);
+        if ($call) {
+            $call->skip();
+            $message->reply("⏭ Skipped");
+        }
+    }
+    
+    #[FilterCommand('stop')]
+    public function stopMusic(Message $message): void
+    {
+        $call = $this->getActiveCall($message->senderId);
+        if ($call) {
+            $call->discard(DiscardReason::HANGUP);
+            $message->reply("⏹ Stopped");
+        }
+    }
+}
+```
+
+### Call Recording Bot
+
+```php
+class RecorderBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function recordIncomingCall(Incoming&VoIP $call): void
+    {
+        // Accept call
+        $call->accept();
+        
+        // Play greeting
+        $call->play(new LocalFile('greeting.mp3'));
+        
+        // Start recording
+        $recordingPath = "/tmp/recording_{$call->otherID}_{$call->callID}.ogg";
+        $call->setOutput(new LocalFile($recordingPath));
+        
+        $this->logger("Recording call to: $recordingPath");
+    }
+}
+```
+
+### Interactive Voice Response (IVR)
+
+```php
+class IVRBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleIVR(Incoming&VoIP $call): void
+    {
+        $call->accept()
+            ->play(new LocalFile('welcome.mp3'))
+            ->then(new LocalFile('menu.mp3'))
+            ->playOnHold(new LocalFile('hold-music.mp3'));
+            
+        // Set timeout to end call
+        $this->scheduleCallEnd($call, 300); // 5 minutes
+    }
+}
+```
+
+## VoIP Settings
+
+Configure VoIP settings:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\VoIP as VoIPSettings;
+
+$settings = new Settings;
+$voip = $settings->getVoip();
+
+// Configure VoIP settings (if needed)
+// Most settings are automatic
+```
+
+## Supported Audio Formats
+
+MadelineProto accepts various audio formats:
+
+- **MP3** - MPEG Audio Layer 3
+- **OGG** - Ogg Vorbis/Opus
+- **WAV** - Waveform Audio
+- **FLAC** - Free Lossless Audio Codec
+- **M4A** - MPEG-4 Audio
+
+Audio is automatically converted to OPUS for transmission.
+
+## Call States
+
+```php
+use danog\MadelineProto\VoIP\CallState;
+
+CallState::WAITING_INCOMING;  // Incoming call, not accepted
+CallState::WAITING_OUTGOING;  // Outgoing call, ringing
+CallState::ESTABLISHED;       // Call in progress
+CallState::ENDED;            // Call ended
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Audio Quality">
+    Use high-quality audio files:
+    - Recommended: 48kHz sample rate
+    - Bitrate: 128kbps or higher
+    - Format: OGG Opus for best quality
+  </Accordion>
+  
+  <Accordion title="Error Handling">
+    Always handle call failures:
+    
+    ```php
+    try {
+        $call = $this->requestCall($userId);
+        $call->play(new LocalFile('audio.mp3'));
+    } catch (\Exception $e) {
+        $this->logger("Call failed: " . $e->getMessage());
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Resource Management">
+    Clean up resources properly:
+    - Discard calls when done
+    - Close file streams
+    - Track active calls
+  </Accordion>
+  
+  <Accordion title="Webhost Support">
+    VoIP works on webhosts! MadelineProto handles the audio processing automatically, even on shared hosting.
+  </Accordion>
+</AccordionGroup>
+
+## Limitations
+
+<Warning>
+- Only **user accounts** can make/receive calls (not bots)
+- Both parties must have VoIP enabled
+- Calls are peer-to-peer (encrypted)
+- Only one active call per account at a time
+</Warning>
+
+## Example: Complete Call Bot
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\VoIP;
+
+class CallBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function onIncomingCall(Incoming&VoIP $call): void
+    {
+        $this->logger("📞 Incoming call from {$call->otherID}");
+        
+        // Accept and greet
+        $call->accept()
+            ->play(new LocalFile('hello.mp3'))
+            ->then(new LocalFile('menu.mp3'));
+        
+        // Set hold music
+        $call->playOnHold(
+            new RemoteUrl('https://example.com/hold1.mp3'),
+            new RemoteUrl('https://example.com/hold2.mp3')
+        );
+        
+        // Get verification emojis
+        $emojis = $call->getVisualization();
+        if ($emojis) {
+            $this->logger("Verify: " . implode(' ', $emojis));
+        }
+        
+        // Record call
+        $call->setOutput(
+            new LocalFile("/recordings/{$call->callID}.ogg")
+        );
+    }
+}
+```

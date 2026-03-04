@@ -1,0 +1,399 @@
+---
+title: AppInfo Settings
+description: Configure application information for Telegram API
+---
+
+# AppInfo Settings
+
+The `AppInfo` class configures your application's identity and metadata when connecting to Telegram.
+
+## Overview
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\API;
+
+$settings = new Settings;
+$settings->getAppInfo()
+    ->setApiId(12345)
+    ->setApiHash('0123456789abcdef0123456789abcdef');
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+## Properties
+
+<ParamField path="apiId" type="int|null">
+  Your API ID from [my.telegram.org](https://my.telegram.org)
+</ParamField>
+
+<ParamField path="apiHash" type="string|null">
+  Your API hash from [my.telegram.org](https://my.telegram.org)
+</ParamField>
+
+<ParamField path="deviceModel" type="string">
+  Device model (auto-detected from system)
+</ParamField>
+
+<ParamField path="systemVersion" type="string">
+  System version (auto-detected from PHP)
+</ParamField>
+
+<ParamField path="appVersion" type="string">
+  Application version (defaults to MadelineProto version)
+</ParamField>
+
+<ParamField path="langCode" type="string" default="en">
+  Language code (ISO 639-1)
+</ParamField>
+
+<ParamField path="systemLangCode" type="string" default="en">
+  System language code
+</ParamField>
+
+<ParamField path="langPack" type="string" default="">
+  Language pack name
+</ParamField>
+
+<ParamField path="showPrompt" type="bool" default="true">
+  Whether to show prompt for API credentials if not provided
+</ParamField>
+
+## Methods
+
+### setApiId
+
+Set your Telegram API ID.
+
+<ParamField path="apiId" type="int" required>
+  API ID from my.telegram.org
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setApiId(12345);
+```
+
+### getApiId
+
+Get the configured API ID.
+
+<ResponseField name="return" type="int">
+  The API ID
+</ResponseField>
+
+<ResponseField name="throws" type="Exception">
+  If API ID is not set
+</ResponseField>
+
+```php
+$apiId = $settings->getAppInfo()->getApiId();
+```
+
+### setApiHash
+
+Set your Telegram API hash.
+
+<ParamField path="apiHash" type="string" required>
+  API hash from my.telegram.org
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setApiHash('0123456789abcdef0123456789abcdef');
+```
+
+### getApiHash
+
+Get the configured API hash.
+
+<ResponseField name="return" type="string">
+  The API hash
+</ResponseField>
+
+<ResponseField name="throws" type="Exception">
+  If API hash is not set
+</ResponseField>
+
+```php
+$apiHash = $settings->getAppInfo()->getApiHash();
+```
+
+### hasApiInfo
+
+Check if API credentials are configured.
+
+<ResponseField name="return" type="bool">
+  True if both API ID and hash are set
+</ResponseField>
+
+```php
+if (!$settings->getAppInfo()->hasApiInfo()) {
+    throw new Exception("Please configure API credentials");
+}
+```
+
+### setDeviceModel
+
+Set device model identifier.
+
+<ParamField path="deviceModel" type="string" required>
+  Device model name
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setDeviceModel('Custom Device');
+```
+
+### getDeviceModel
+
+Get the device model.
+
+<ResponseField name="return" type="string">
+  Device model name
+</ResponseField>
+
+```php
+$device = $settings->getAppInfo()->getDeviceModel();
+```
+
+### setSystemVersion
+
+Set system version identifier.
+
+<ParamField path="systemVersion" type="string" required>
+  System version
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setSystemVersion('Ubuntu 22.04');
+```
+
+### getSystemVersion
+
+Get the system version.
+
+<ResponseField name="return" type="string">
+  System version
+</ResponseField>
+
+```php
+$version = $settings->getAppInfo()->getSystemVersion();
+```
+
+### setAppVersion
+
+Set application version.
+
+<ParamField path="appVersion" type="string" required>
+  Application version
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setAppVersion('1.0.0');
+```
+
+### getAppVersion
+
+Get the application version.
+
+<ResponseField name="return" type="string">
+  Application version
+</ResponseField>
+
+```php
+$version = $settings->getAppInfo()->getAppVersion();
+```
+
+### setLangCode
+
+Set language code.
+
+<ParamField path="langCode" type="string" required>
+  ISO 639-1 language code (e.g., 'en', 'it', 'ru')
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setLangCode('it');
+```
+
+### getLangCode
+
+Get the language code.
+
+<ResponseField name="return" type="string">
+  Language code
+</ResponseField>
+
+```php
+$lang = $settings->getAppInfo()->getLangCode();
+```
+
+### setSystemLangCode
+
+Set system language code.
+
+<ParamField path="langCode" type="string" required>
+  System language code
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setSystemLangCode('en');
+```
+
+### getSystemLangCode
+
+Get the system language code.
+
+<ResponseField name="return" type="string">
+  System language code
+</ResponseField>
+
+```php
+$sysLang = $settings->getAppInfo()->getSystemLangCode();
+```
+
+### setLangPack
+
+Set language pack name.
+
+<ParamField path="langPack" type="string" required>
+  Language pack identifier
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getAppInfo()->setLangPack('android');
+```
+
+### getLangPack
+
+Get the language pack.
+
+<ResponseField name="return" type="string">
+  Language pack name
+</ResponseField>
+
+```php
+$pack = $settings->getAppInfo()->getLangPack();
+```
+
+### setShowPrompt
+
+Set whether to show API credentials prompt.
+
+<ParamField path="showPrompt" type="bool" required>
+  Whether to show prompt if credentials are missing
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+// Disable prompt - will throw exception if credentials missing
+$settings->getAppInfo()->setShowPrompt(false);
+```
+
+### getShowPrompt
+
+Get whether the prompt is enabled.
+
+<ResponseField name="return" type="bool">
+  True if prompt is enabled
+</ResponseField>
+
+```php
+$shouldPrompt = $settings->getAppInfo()->getShowPrompt();
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\API;
+
+$settings = new Settings;
+
+// Configure app info
+$appInfo = $settings->getAppInfo();
+$appInfo->setApiId(12345);
+$appInfo->setApiHash('0123456789abcdef0123456789abcdef');
+$appInfo->setDeviceModel('MyBot Server');
+$appInfo->setSystemVersion('Linux 5.15');
+$appInfo->setAppVersion('2.0.0');
+$appInfo->setLangCode('en');
+
+// Or use method chaining
+$settings->getAppInfo()
+    ->setApiId(12345)
+    ->setApiHash('0123456789abcdef0123456789abcdef')
+    ->setDeviceModel('MyBot Server')
+    ->setSystemVersion('Linux 5.15')
+    ->setAppVersion('2.0.0')
+    ->setLangCode('en');
+
+// Create API instance
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+## Getting API Credentials
+
+1. Go to [my.telegram.org](https://my.telegram.org)
+2. Log in with your phone number
+3. Go to "API development tools"
+4. Create a new application (if you haven't already)
+5. Copy your `api_id` and `api_hash`
+
+<Warning>
+Never share your API hash publicly or commit it to version control. Use environment variables:
+
+```php
+$settings->getAppInfo()
+    ->setApiId((int)getenv('TELEGRAM_API_ID'))
+    ->setApiHash(getenv('TELEGRAM_API_HASH'));
+```
+</Warning>
+
+## Auto-Detection
+
+Some properties are auto-detected:
+
+- **Device Model**: Detected via `php_uname('s')` (falls back to "Web server")
+- **System Version**: Detected via `php_uname('r')` (falls back to PHP version)
+- **Language**: Detected from `HTTP_ACCEPT_LANGUAGE` or `LANG` environment variable
+
+## See Also
+
+- [Connection Settings](/api/settings/connection) - Configure connection parameters
+- [Logger Settings](/api/settings/logger) - Configure logging
+- [Database Settings](/api/settings/database) - Configure database backend

@@ -1,0 +1,578 @@
+---
+title: Connection Settings
+description: Configure MTProto connection parameters
+---
+
+# Connection Settings
+
+The `Connection` class configures how MadelineProto connects to Telegram's servers.
+
+## Overview
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Stream\MTProtoTransport\AbridgedStream;
+
+$settings = new Settings;
+$settings->getConnection()
+    ->setTimeout(10.0)
+    ->setRetry(true)
+    ->setProtocol(AbridgedStream::class);
+```
+
+## Properties
+
+<ParamField path="protocol" type="class-string" default="AbridgedStream::class">
+  MTProto transport protocol to use
+</ParamField>
+
+<ParamField path="transport" type="class-string" default="DefaultStream::class">
+  Transport layer (TCP, WebSocket, etc.)
+</ParamField>
+
+<ParamField path="proxy" type="array" default="[]">
+  Proxy configuration
+</ParamField>
+
+<ParamField path="obfuscated" type="bool" default="false">
+  Whether to use obfuscation (helps bypass ISP blocks)
+</ParamField>
+
+<ParamField path="testMode" type="bool" default="false">
+  Whether to connect to test servers
+</ParamField>
+
+<ParamField path="ipv6" type="bool" default="false">
+  Whether to prefer IPv6
+</ParamField>
+
+<ParamField path="timeout" type="float" default="5.0">
+  Connection timeout in seconds
+</ParamField>
+
+<ParamField path="pingInterval" type="int" default="60">
+  Ping interval in seconds
+</ParamField>
+
+<ParamField path="retry" type="bool" default="true">
+  Whether to retry failed connections
+</ParamField>
+
+<ParamField path="useDoH" type="bool" default="true">
+  Whether to use DNS over HTTPS
+</ParamField>
+
+<ParamField path="bindTo" type="string|null" default="null">
+  Bind to specific address and port
+</ParamField>
+
+<ParamField path="maxMediaSocketCount" type="int" default="10">
+  Maximum number of media sockets
+</ParamField>
+
+<ParamField path="robinPeriod" type="int" default="10">
+  Round-robin period in seconds
+</ParamField>
+
+## Protocol Configuration
+
+### setProtocol
+
+Set the MTProto transport protocol.
+
+<ParamField path="protocol" type="class-string" required>
+  Protocol class name
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+Available protocols:
+
+#### AbridgedStream (Recommended)
+
+Lightest protocol with minimal overhead.
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\AbridgedStream;
+
+$settings->getConnection()->setProtocol(AbridgedStream::class);
+```
+
+- **Overhead**: Very small
+- **Envelope**: 1-4 bytes
+
+#### IntermediateStream
+
+Standard protocol with small overhead.
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\IntermediateStream;
+
+$settings->getConnection()->setProtocol(IntermediateStream::class);
+```
+
+- **Overhead**: Small
+- **Envelope**: 4 bytes
+
+#### IntermediatePaddedStream
+
+Padded version for use with obfuscation.
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\IntermediatePaddedStream;
+
+$settings->getConnection()
+    ->setProtocol(IntermediatePaddedStream::class)
+    ->setObfuscated(true);
+```
+
+- **Overhead**: Small-medium
+- **Envelope**: Random length
+- **Best for**: Bypassing ISP blocks
+
+#### FullStream
+
+Basic MTProto protocol with CRC and sequence checks.
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\FullStream;
+
+$settings->getConnection()->setProtocol(FullStream::class);
+```
+
+- **Overhead**: Medium
+- **Envelope**: 12 bytes
+- **Features**: CRC32 integrity check, sequence numbers
+
+#### HttpStream / HttpsStream
+
+For browsers and restricted webhosts.
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\HttpsStream;
+
+$settings->getConnection()->setProtocol(HttpsStream::class);
+```
+
+- **Overhead**: High
+- **Use case**: Web environments, additional TLS security
+
+### getProtocol
+
+Get the current protocol.
+
+<ResponseField name="return" type="string">
+  Protocol class name
+</ResponseField>
+
+```php
+$protocol = $settings->getConnection()->getProtocol();
+```
+
+## Transport Configuration
+
+### setTransport
+
+Set the transport layer.
+
+<ParamField path="transport" type="class-string" required>
+  Transport class name
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+use danog\MadelineProto\Stream\Transport\DefaultStream;
+
+$settings->getConnection()->setTransport(DefaultStream::class);
+```
+
+Available transports:
+- `DefaultStream` - Standard TCP transport
+- `WsStream` - Plain WebSocket transport
+- `WssStream` - TLS WebSocket transport
+
+### getTransport
+
+Get the current transport.
+
+<ResponseField name="return" type="string">
+  Transport class name
+</ResponseField>
+
+```php
+$transport = $settings->getConnection()->getTransport();
+```
+
+## Connection Parameters
+
+### setTimeout
+
+Set connection timeout.
+
+<ParamField path="timeout" type="float" required>
+  Timeout in seconds
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setTimeout(10.0);
+```
+
+### getTimeout
+
+Get connection timeout.
+
+<ResponseField name="return" type="float">
+  Timeout in seconds
+</ResponseField>
+
+### setPingInterval
+
+Set ping interval to keep connection alive.
+
+<ParamField path="pingInterval" type="int" required>
+  Interval in seconds
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setPingInterval(30);
+```
+
+### getPingInterval
+
+Get ping interval.
+
+<ResponseField name="return" type="int">
+  Interval in seconds
+</ResponseField>
+
+### setRetry
+
+Set whether to retry failed connections.
+
+<ParamField path="retry" type="bool" required>
+  Enable/disable retry
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setRetry(true);
+```
+
+### getRetry
+
+Get retry setting.
+
+<ResponseField name="return" type="bool">
+  Whether retry is enabled
+</ResponseField>
+
+## Network Options
+
+### setIpv6
+
+Enable IPv6 connections.
+
+<ParamField path="ipv6" type="bool" required>
+  Enable/disable IPv6
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setIpv6(true);
+```
+
+### getIpv6
+
+Get IPv6 setting.
+
+<ResponseField name="return" type="bool">
+  Whether IPv6 is enabled
+</ResponseField>
+
+### setUseDoH
+
+Enable DNS over HTTPS.
+
+<ParamField path="useDoH" type="bool" required>
+  Enable/disable DoH
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setUseDoH(true);
+```
+
+### getUseDoH
+
+Get DoH setting.
+
+<ResponseField name="return" type="bool">
+  Whether DoH is enabled
+</ResponseField>
+
+### setBindTo
+
+Bind connection to specific address.
+
+<ParamField path="bindTo" type="string|null" required>
+  Address and port (e.g., "192.168.1.100:0")
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setBindTo('192.168.1.100:0');
+```
+
+### getBindTo
+
+Get bind address.
+
+<ResponseField name="return" type="string|null">
+  Bind address or null
+</ResponseField>
+
+## Proxy Configuration
+
+### addProxy
+
+Add a proxy to the connection.
+
+<ParamField path="proxy" type="class-string" required>
+  Proxy class name
+</ParamField>
+
+<ParamField path="extra" type="array" default="[]">
+  Proxy configuration (address, port, username, password)
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+#### SOCKS5 Proxy
+
+```php
+use danog\MadelineProto\Stream\Proxy\SocksProxy;
+
+$settings->getConnection()->addProxy(SocksProxy::class, [
+    'address' => '127.0.0.1',
+    'port' => 1080,
+    'username' => 'user',
+    'password' => 'pass',
+]);
+```
+
+#### HTTP Proxy
+
+```php
+use danog\MadelineProto\Stream\Proxy\HttpProxy;
+
+$settings->getConnection()->addProxy(HttpProxy::class, [
+    'address' => '127.0.0.1',
+    'port' => 8080,
+]);
+```
+
+### setProxies
+
+Set all proxies at once.
+
+<ParamField path="proxies" type="array" required>
+  Array of proxy configurations
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+use danog\MadelineProto\Stream\Proxy\SocksProxy;
+
+$settings->getConnection()->setProxies([
+    SocksProxy::class => [
+        ['address' => '127.0.0.1', 'port' => 1080],
+    ],
+]);
+```
+
+### clearProxies
+
+Remove all proxies.
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->clearProxies();
+```
+
+### getProxies
+
+Get all configured proxies.
+
+<ResponseField name="return" type="array">
+  Array of proxy configurations
+</ResponseField>
+
+```php
+$proxies = $settings->getConnection()->getProxies();
+```
+
+## Obfuscation
+
+### setObfuscated
+
+Enable connection obfuscation to bypass ISP blocks.
+
+<ParamField path="obfuscated" type="bool" required>
+  Enable/disable obfuscation
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\IntermediatePaddedStream;
+
+$settings->getConnection()
+    ->setProtocol(IntermediatePaddedStream::class)
+    ->setObfuscated(true);
+```
+
+### getObfuscated
+
+Get obfuscation setting.
+
+<ResponseField name="return" type="bool">
+  Whether obfuscation is enabled
+</ResponseField>
+
+## Test Mode
+
+### setTestMode
+
+Connect to Telegram test servers.
+
+<ParamField path="testMode" type="bool" required>
+  Enable/disable test mode
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setTestMode(true);
+```
+
+<Warning>
+Test mode connects to separate Telegram test servers. Use only for development.
+</Warning>
+
+### getTestMode
+
+Get test mode setting.
+
+<ResponseField name="return" type="bool">
+  Whether test mode is enabled
+</ResponseField>
+
+## Advanced Settings
+
+### setMaxMediaSocketCount
+
+Set maximum number of media download sockets.
+
+<ParamField path="maxMediaSocketCount" type="int" required>
+  Maximum socket count
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setMaxMediaSocketCount(20);
+```
+
+### setRobinPeriod
+
+Set round-robin period for connections.
+
+<ParamField path="robinPeriod" type="int" required>
+  Period in seconds
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getConnection()->setRobinPeriod(10);
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Stream\MTProtoTransport\{AbridgedStream, IntermediatePaddedStream};
+use danog\MadelineProto\Stream\Proxy\SocksProxy;
+
+$settings = new Settings;
+
+// Basic configuration
+$settings->getConnection()
+    ->setTimeout(10.0)
+    ->setRetry(true)
+    ->setPingInterval(60);
+
+// Use obfuscation to bypass blocks
+$settings->getConnection()
+    ->setProtocol(IntermediatePaddedStream::class)
+    ->setObfuscated(true);
+
+// Configure SOCKS5 proxy
+$settings->getConnection()->addProxy(SocksProxy::class, [
+    'address' => '127.0.0.1',
+    'port' => 9050, // Tor default port
+]);
+
+// Enable IPv6
+$settings->getConnection()->setIpv6(true);
+
+// Increase media download speed
+$settings->getConnection()->setMaxMediaSocketCount(20);
+```
+
+## See Also
+
+- [AppInfo Settings](/api/settings/app-info) - Configure API credentials
+- [Logger Settings](/api/settings/logger) - Configure logging
+- [Files Settings](/api/settings/files) - Configure file operations

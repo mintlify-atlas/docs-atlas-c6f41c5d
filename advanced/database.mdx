@@ -1,0 +1,334 @@
+---
+title: Database Configuration
+description: Configure persistent storage backends for MadelineProto sessions and data
+---
+
+MadelineProto supports multiple database backends for storing session data, peer information, and application state. By default, it uses in-memory storage, but you can configure MySQL, PostgreSQL, or Redis for production deployments.
+
+## Database Backends
+
+MadelineProto provides several database backend implementations in the `danog\MadelineProto\Settings\Database` namespace:
+
+<CardGroup cols={2}>
+  <Card title="Memory" icon="microchip">
+    Default in-memory storage (not persistent)
+  </Card>
+  <Card title="MySQL" icon="database">
+    MariaDB 10.2+ or MySQL 5.6+
+  </Card>
+  <Card title="PostgreSQL" icon="elephant">
+    PostgreSQL database support
+  </Card>
+  <Card title="Redis" icon="server">
+    Redis key-value store
+  </Card>
+</CardGroup>
+
+## Memory Backend (Default)
+
+The `Memory` backend stores data in RAM. Data is lost when the process stops.
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Memory;
+
+$settings = new Settings;
+$settings->setDb(new Memory);
+```
+
+<Note>
+  This is the default backend and suitable for development or testing.
+</Note>
+
+## MySQL Backend
+
+Configure MySQL/MariaDB for persistent storage:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Mysql;
+
+$settings = new Settings;
+
+$mysql = new Mysql;
+$mysql->setDatabase('MadelineProto');
+$mysql->setUsername('root');
+$mysql->setPassword('your_password');
+$mysql->setUri('tcp://127.0.0.1'); // or 'tcp://host:port'
+
+$settings->setDb($mysql);
+```
+
+### MySQL Configuration Options
+
+#### Basic Settings
+
+```php
+$mysql = (new Mysql)
+    ->setDatabase('MadelineProto')    // Database name
+    ->setUsername('root')              // Database username
+    ->setPassword('secret')            // Database password
+    ->setUri('tcp://localhost:3306');  // Database URI
+```
+
+#### Connection Pool
+
+```php
+$mysql->setMaxConnections(100);  // Maximum concurrent connections (default: 100)
+$mysql->setIdleTimeout(60);      // Idle connection timeout in seconds (default: 60)
+```
+
+#### Cache Settings
+
+```php
+$mysql->setCacheTtl(300);        // Keep records in memory for 5 minutes
+// Or use string format:
+$mysql->setCacheTtl('+5 minutes');
+```
+
+<Info>
+  The cache TTL reduces database load by keeping frequently accessed data in memory. Clean up runs once per minute.
+</Info>
+
+#### Table Optimization
+
+```php
+// Optimize tables automatically if more than 10MB is wasted
+$mysql->setOptimizeIfWastedGtMb(10);
+```
+
+<Warning>
+  Table optimization can cause slowdowns on startup. Use cautiously in production.
+</Warning>
+
+## PostgreSQL Backend
+
+Configure PostgreSQL for persistent storage:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Postgres;
+
+$settings = new Settings;
+
+$postgres = new Postgres;
+$postgres->setDatabase('MadelineProto');
+$postgres->setUsername('postgres');
+$postgres->setPassword('your_password');
+$postgres->setUri('tcp://127.0.0.1:5432');
+
+$settings->setDb($postgres);
+```
+
+### PostgreSQL Configuration Options
+
+PostgreSQL supports the same options as MySQL:
+
+```php
+$postgres = (new Postgres)
+    ->setDatabase('MadelineProto')
+    ->setUsername('postgres')
+    ->setPassword('secret')
+    ->setUri('tcp://localhost:5432')
+    ->setMaxConnections(100)
+    ->setIdleTimeout(60)
+    ->setCacheTtl(300);
+```
+
+## Redis Backend
+
+Configure Redis for high-performance key-value storage:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Redis;
+
+$settings = new Settings;
+
+$redis = new Redis;
+$redis->setDatabase(0);                  // Redis database number
+$redis->setPassword('your_password');    // Optional password
+$redis->setUri('redis://127.0.0.1');
+
+$settings->setDb($redis);
+```
+
+### Redis Configuration Options
+
+```php
+$redis = (new Redis)
+    ->setUri('redis://localhost:6379')
+    ->setDatabase(0)           // Redis database number (default: 0)
+    ->setPassword('secret')    // Optional password
+    ->setCacheTtl(300);        // Cache TTL in seconds
+```
+
+## Database Feature Flags
+
+All database backends support fine-grained control over which databases are enabled:
+
+```php
+$db = new Mysql;
+
+// File reference database (required for file downloads)
+$db->setEnableFileReferenceDb(true);  // default: true
+
+// Min database (required for sendMessage in certain conditions)
+$db->setEnableMinDb(true);            // default: true
+
+// Username database (required for sendMessage with usernames)
+$db->setEnableUsernameDb(true);       // default: true
+
+// Full peer info database (required for getFullInfo)
+$db->setEnableFullPeerDb(true);       // default: true
+
+// Peer info database (required for getInfo)
+$db->setEnablePeerInfoDb(true);       // default: true
+```
+
+<Warning>
+  Disabling these databases will break specific functionality. Only disable if you know what you're doing.
+</Warning>
+
+## Serialization
+
+Choose the serialization format for stored data:
+
+```php
+use danog\MadelineProto\Settings\Database\SerializerType;
+
+$db->setSerializer(SerializerType::IGBINARY);   // Fast binary serialization
+$db->setSerializer(SerializerType::SERIALIZE);  // PHP native serialization
+$db->setSerializer(null);                       // Auto-select best available
+```
+
+<Info>
+  `IGBINARY` is faster and more compact but requires the igbinary PHP extension.
+</Info>
+
+## Ephemeral Filesystems (Docker)
+
+When running in Docker containers without persistent volumes, use the ephemeral filesystem prefix:
+
+```php
+$mysql = new Mysql;
+$mysql->setDatabase('MadelineProto');
+$mysql->setUsername('root');
+$mysql->setPassword('password');
+$mysql->setUri('tcp://mysql:3306');
+
+// Set a unique prefix for this session
+$mysql->setEphemeralFilesystemPrefix('bot_session_1');
+
+$settings->setDb($mysql);
+```
+
+<Warning>
+  **Important:** Never delete the session folder while MadelineProto is running, or you'll get `AUTH_KEY_DUPLICATED` errors. Stopping the container first, then deleting the folder is safe.
+</Warning>
+
+### How It Works
+
+- Session files are not used for persistent data storage
+- All data is stored in the database with the specified prefix
+- Each session must have a unique prefix
+- Prefixes can be the same across different databases
+
+## Complete Example
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Mysql;
+use danog\MadelineProto\Settings\Database\Postgres;
+use danog\MadelineProto\Settings\Database\Redis;
+use danog\MadelineProto\Settings\Logger;
+
+$settings = new Settings;
+$settings->getLogger()->setLevel(Logger::LEVEL_ULTRA_VERBOSE);
+
+// Choose your backend:
+
+// MySQL
+$settings->setDb(
+    (new Mysql)
+        ->setDatabase('MadelineProto')
+        ->setUsername('root')
+        ->setPassword('secret')
+        ->setUri('tcp://mysql:3306')
+        ->setMaxConnections(100)
+        ->setCacheTtl('+5 minutes')
+);
+
+// PostgreSQL
+$settings->setDb(
+    (new Postgres)
+        ->setDatabase('MadelineProto')
+        ->setUsername('postgres')
+        ->setPassword('secret')
+        ->setUri('tcp://postgres:5432')
+);
+
+// Redis
+$settings->setDb(
+    (new Redis)
+        ->setDatabase(0)
+        ->setPassword('secret')
+        ->setUri('redis://redis:6379')
+);
+
+MyEventHandler::startAndLoop('bot.madeline', $settings);
+```
+
+## Environment-Based Configuration
+
+```php
+$settings = new Settings;
+
+if (getenv('DB_TYPE') === 'mysql') {
+    $settings->setDb(
+        (new Mysql)
+            ->setDatabase(getenv('DB_NAME'))
+            ->setUsername(getenv('DB_USER'))
+            ->setPassword(getenv('DB_PASS'))
+            ->setUri(getenv('DB_HOST'))
+    );
+} elseif (getenv('DB_TYPE') === 'postgres') {
+    $settings->setDb(
+        (new Postgres)
+            ->setDatabase(getenv('DB_NAME'))
+            ->setUsername(getenv('DB_USER'))
+            ->setPassword(getenv('DB_PASS'))
+            ->setUri(getenv('DB_HOST'))
+    );
+} elseif (getenv('DB_TYPE') === 'redis') {
+    $settings->setDb(
+        (new Redis)
+            ->setDatabase((int)getenv('REDIS_DB'))
+            ->setPassword(getenv('REDIS_PASS'))
+            ->setUri(getenv('REDIS_HOST'))
+    );
+}
+```
+
+## Performance Tips
+
+<CardGroup cols={2}>
+  <Card title="Cache TTL" icon="clock">
+    Set appropriate cache TTL to balance memory usage and database load
+  </Card>
+  <Card title="Connection Pool" icon="pool">
+    Tune max connections based on your workload
+  </Card>
+  <Card title="Database Selection" icon="chart-line">
+    Use Redis for high-performance scenarios, SQL for complex queries
+  </Card>
+  <Card title="Monitoring" icon="gauge">
+    Monitor database connections and query performance
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Docker Deployment](/advanced/docker)
+- [Settings Overview](/advanced/settings)
+- [Plugin System](/advanced/plugins)

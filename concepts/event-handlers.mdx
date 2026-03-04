@@ -1,0 +1,438 @@
+---
+title: Event Handlers
+description: Build powerful Telegram bots using MadelineProto's event-driven architecture
+---
+
+## Overview
+
+Event handlers are the core of MadelineProto bots. They allow you to react to updates (messages, button clicks, etc.) in an object-oriented, type-safe way.
+
+## Basic Event Handler
+
+Create an event handler by extending `SimpleEventHandler`:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void
+    {
+        $message->reply('Hello! You said: ' . $message->message);
+    }
+}
+
+// Start the bot
+MyBot::startAndLoop('bot.madeline');
+```
+
+From `SimpleEventHandler.php:26`, this class provides access to filters and the simplified API.
+
+## Handler Attributes
+
+### #[Handler]
+
+Mark methods that should handle updates:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+
+#[Handler]
+public function myHandler(Message $message): void
+{
+    // Handle any message update
+}
+```
+
+From `EventHandler/Attributes/Handler.php:23`, this attribute marks a method as an update handler.
+
+### Filter Attributes
+
+Use filter attributes for specific update types:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+
+#[FilterCommand('start')]
+public function startCommand(Message $message): void
+{
+    $message->reply('Welcome!');
+}
+
+#[FilterCommand('help')]
+public function helpCommand(Message $message): void
+{
+    $message->reply('Here is the help text...');
+}
+```
+
+## Event Handler Lifecycle
+
+### onStart
+
+Called once when the event handler initializes:
+
+```php
+public function onStart(): void
+{
+    $this->logger('Bot started!');
+    $this->sendMessageToAdmins('Bot is now online');
+}
+```
+
+From `EventHandler.php:230`, this method:
+- Runs during initialization
+- Cannot use `yield` (must not be a generator)
+- Useful for setup tasks
+
+### onStop
+
+Called when the event handler shuts down:
+
+```php
+public function __destruct()
+{
+    // Cleanup tasks
+}
+```
+
+## Update Types
+
+MadelineProto provides typed update classes:
+
+### Message Updates
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Message\PrivateMessage;
+use danog\MadelineProto\EventHandler\Message\GroupMessage;
+use danog\MadelineProto\EventHandler\Message\ChannelMessage;
+
+#[Handler]
+public function handlePrivate(PrivateMessage $message): void
+{
+    // Only private messages
+}
+
+#[Handler]
+public function handleGroup(GroupMessage $message): void
+{
+    // Only group messages
+}
+
+#[Handler]
+public function handleChannel(ChannelMessage $message): void
+{
+    // Only channel posts
+}
+```
+
+### Service Messages
+
+```php
+use danog\MadelineProto\EventHandler\Message\ServiceMessage;
+use danog\MadelineProto\EventHandler\Message\Service\DialogPhotoChanged;
+
+#[Handler]
+public function photoChanged(DialogPhotoChanged $message): void
+{
+    if ($message->photo) {
+        $message->reply('New photo set!');
+    }
+}
+```
+
+### Other Update Types
+
+```php
+use danog\MadelineProto\VoIP;
+
+#[Handler]
+public function handleCall(Incoming&VoIP $call): void
+{
+    // Handle incoming calls
+    $call->accept();
+}
+```
+
+## Property Persistence
+
+Properties are automatically persisted across restarts:
+
+```php
+class MyBot extends SimpleEventHandler
+{
+    private array $userStats = [];
+    private int $messageCount = 0;
+    
+    public function __sleep(): array
+    {
+        // Return properties to persist
+        return ['userStats', 'messageCount'];
+    }
+    
+    #[Handler]
+    public function handleMessage(Message $message): void
+    {
+        $this->messageCount++;
+        $this->userStats[$message->senderId] ??= 0;
+        $this->userStats[$message->senderId]++;
+    }
+}
+```
+
+From `examples/bot.php:88`, properties returned by `__sleep()` are saved to the database.
+
+## Error Reporting
+
+Configure where error reports are sent:
+
+```php
+public function getReportPeers()
+{
+    return ['@admin', self::ADMIN];
+}
+```
+
+From `examples/bot.php:98`, this method returns peer(s) where errors should be reported.
+
+## Cron Jobs
+
+Schedule periodic tasks using the `#[Cron]` attribute:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+
+#[Cron(period: 60.0)]
+public function everyMinute(): void
+{
+    $this->sendMessageToAdmins('Minute passed!');
+}
+
+#[Cron(period: 3600.0)]
+public function hourlyTask(): void
+{
+    // Cleanup or maintenance tasks
+}
+```
+
+From `EventHandler/Attributes/Cron.php:25`, the period is in seconds.
+
+### Managing Cron Jobs
+
+```php
+// Get a specific periodic loop
+$loop = $this->getPeriodicLoop('everyMinute');
+if ($loop) {
+    $loop->stop();
+    $loop->start();
+}
+
+// Get all periodic loops
+$loops = $this->getPeriodicLoops();
+```
+
+From `EventHandler.php:371`, these methods manage cron jobs created by the `#[Cron]` attribute.
+
+## Plugins
+
+Extend functionality with plugins:
+
+```php
+public static function getPlugins(): array
+{
+    return [
+        RestartPlugin::class,
+        // Add more plugins
+    ];
+}
+```
+
+From `examples/bot.php:117`, plugins are event handlers that extend `PluginEventHandler`.
+
+### Plugin Paths
+
+Load plugins from directories:
+
+```php
+public static function getPluginPaths(): string|array|null
+{
+    return 'plugins/';
+}
+```
+
+From `EventHandler.php:410`, plugin files must:
+- End with `Plugin.php`
+- Extend `PluginEventHandler`
+- Be in the `MadelinePlugin` namespace
+
+## Multiple Event Handlers
+
+Run multiple bot instances simultaneously:
+
+```php
+use danog\MadelineProto\API;
+
+$instances = [
+    'bot1' => new API('bot1.madeline'),
+    'bot2' => new API('bot2.madeline'),
+];
+
+$handlers = [
+    'bot1' => Bot1Handler::class,
+    'bot2' => Bot2Handler::class,
+];
+
+API::startAndLoopMulti($instances, $handlers);
+```
+
+From `API.php:410`, this starts multiple instances with their respective handlers.
+
+## Advanced Patterns
+
+### Handling Broadcasts
+
+```php
+use danog\MadelineProto\Broadcast\Progress;
+use danog\MadelineProto\Broadcast\Status;
+
+#[FilterCommand('broadcast')]
+public function broadcast(Message & FromAdmin $message): void
+{
+    if (!$message->replyToMsgId) {
+        $message->reply('Reply to a message to broadcast');
+        return;
+    }
+    
+    $this->broadcastForwardMessages(
+        from_peer: $message->senderId,
+        message_ids: [$message->replyToMsgId],
+        drop_author: true,
+        pin: true
+    );
+}
+
+#[Handler]
+public function broadcastProgress(Progress $progress): void
+{
+    if ($progress->status === Status::FINISHED) {
+        $this->sendMessageToAdmins(
+            "Broadcast complete: {$progress->sent} sent"
+        );
+    }
+}
+```
+
+From `examples/bot.php:192`, broadcast progress updates are handled separately.
+
+### Database Properties
+
+Use ORM annotations for database-backed properties:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\OrmMappedArray;
+
+class MyBot extends SimpleEventHandler
+{
+    #[OrmMappedArray]
+    private DbArray $users;
+    
+    public function onStart(): void
+    {
+        // Database arrays are automatically initialized
+        $this->users[123] = ['name' => 'John', 'score' => 100];
+    }
+}
+```
+
+From `EventHandler.php:219`, use ORM annotations instead of the deprecated `$dbProperties`.
+
+## Complete Example
+
+Here's a complete event handler with multiple features:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Attributes\{Handler, Cron};
+use danog\MadelineProto\EventHandler\Filter\{FilterCommand, FilterRegex};
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\{Incoming, FromAdmin};
+use danog\MadelineProto\ParseMode;
+
+class MyBot extends SimpleEventHandler
+{
+    public const ADMIN = '@myusername';
+    
+    private array $stats = [];
+    
+    public function __sleep(): array
+    {
+        return ['stats'];
+    }
+    
+    public function getReportPeers()
+    {
+        return [self::ADMIN];
+    }
+    
+    public function onStart(): void
+    {
+        $this->logger('Bot started successfully');
+    }
+    
+    #[FilterCommand('start')]
+    public function startCommand(Message $message): void
+    {
+        $message->reply(
+            message: 'Welcome to **MyBot**!',
+            parseMode: ParseMode::MARKDOWN
+        );
+    }
+    
+    #[FilterCommand('stats')]
+    public function statsCommand(Message & FromAdmin $message): void
+    {
+        $totalMessages = array_sum($this->stats);
+        $message->reply("Total messages: $totalMessages");
+    }
+    
+    #[Handler]
+    public function trackMessages(Incoming&Message $message): void
+    {
+        $this->stats[$message->chatId] ??= 0;
+        $this->stats[$message->chatId]++;
+    }
+    
+    #[FilterRegex('/hello|hi|hey/i')]
+    public function greetings(Message $message): void
+    {
+        $message->reply('Hello there!');
+    }
+    
+    #[Cron(period: 3600.0)]
+    public function hourlyReport(): void
+    {
+        $total = array_sum($this->stats);
+        $this->sendMessageToAdmins(
+            "Hourly stats: $total messages processed"
+        );
+    }
+}
+
+MyBot::startAndLoop('bot.madeline');
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Filters" icon="filter" href="/concepts/filters">
+    Learn about powerful filtering mechanisms
+  </Card>
+  <Card title="Updates" icon="bell" href="/concepts/updates">
+    Explore all available update types
+  </Card>
+</CardGroup>

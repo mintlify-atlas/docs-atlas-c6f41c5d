@@ -1,0 +1,268 @@
+---
+title: Login Methods
+description: Authenticate your MadelineProto client as a bot or user account with various login flows
+---
+
+## Overview
+
+MadelineProto supports multiple authentication methods for both bots and user accounts. The login flow depends on your use case and account type.
+
+## Bot Login
+
+The simplest login method uses a bot token obtained from [@BotFather](https://t.me/BotFather):
+
+```php
+use danog\MadelineProto\API;
+
+$MadelineProto = new API('bot.madeline');
+$MadelineProto->botLogin('YOUR_BOT_TOKEN');
+```
+
+### Bot Login with Event Handler
+
+For bots using event handlers, use the `startAndLoopBot` method:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+
+class MyBot extends SimpleEventHandler
+{
+    // Your event handler methods
+}
+
+// Start bot and event loop
+MyBot::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+This method from `EventHandler.php:171`:
+- Initializes the API client
+- Performs bot authentication
+- Starts the event handler loop
+- Sets up error reporting
+
+## User Login (Phone Number)
+
+User accounts require a multi-step authentication process:
+
+### Step 1: Send Code
+
+```php
+$MadelineProto = new API('user.madeline');
+$authorization = $MadelineProto->phoneLogin('+1234567890');
+```
+
+The `phoneLogin` method (`Wrappers/Login.php:192`):
+- Sends an SMS/Telegram code to the phone number
+- Returns authorization info
+- Sets login state to `API::WAITING_CODE`
+
+### Step 2: Complete Login
+
+```php
+// User enters the code received via SMS/Telegram
+$code = readline('Enter code: ');
+
+$authorization = $MadelineProto->completePhoneLogin($code);
+```
+
+### Handling 2FA
+
+If two-factor authentication is enabled:
+
+```php
+if ($authorization['_'] === 'account.password') {
+    $password = readline('Enter 2FA password: ');
+    $authorization = $MadelineProto->complete2faLogin($password);
+}
+```
+
+From `Wrappers/Login.php:334`, the `complete2faLogin` method:
+- Verifies the 2FA password
+- Completes the authentication process
+- Updates login state to `API::LOGGED_IN`
+
+### Handling Signup
+
+If the phone number is not registered:
+
+```php
+if ($authorization['_'] === 'account.needSignup') {
+    $firstName = readline('Enter first name: ');
+    $lastName = readline('Enter last name (optional): ');
+    
+    $authorization = $MadelineProto->completeSignup($firstName, $lastName);
+}
+```
+
+## QR Code Login
+
+For user accounts, MadelineProto supports QR code login:
+
+```php
+$qrCode = $MadelineProto->qrLogin();
+
+if ($qrCode) {
+    // Display QR code to user
+    echo "Scan this QR code: " . $qrCode->getQrCodeLink() . "\n";
+    
+    // Wait for login
+    $MadelineProto->waitQrLogin();
+}
+```
+
+The `qrLogin` method (`Wrappers/Login.php:92`):
+- Generates a login QR code
+- Returns a `LoginQrCode` object with:
+  - `getQrCodeLink()`: The `tg://login?token=...` URL
+  - `isExpired()`: Check if QR code is still valid
+  - `getExpiry()`: Get expiration timestamp
+
+<Note>
+QR codes expire after a certain period. Check `isExpired()` and regenerate if needed.
+</Note>
+
+## Login States
+
+MadelineProto tracks the authentication state using constants from `API.php:56-90`:
+
+<ResponseField name="NOT_LOGGED_IN" type="int" value="0">
+  No authentication has been performed
+</ResponseField>
+
+<ResponseField name="WAITING_CODE" type="int" value="1">
+  Waiting for SMS/Telegram login code
+</ResponseField>
+
+<ResponseField name="WAITING_SIGNUP" type="int" value="-1">
+  Phone number not registered, signup required
+</ResponseField>
+
+<ResponseField name="WAITING_PASSWORD" type="int" value="2">
+  Waiting for 2FA password
+</ResponseField>
+
+<ResponseField name="LOGGED_IN" type="int" value="3">
+  Successfully authenticated
+</ResponseField>
+
+<ResponseField name="LOGGED_OUT" type="int" value="4">
+  Logged out, session will be deleted
+</ResponseField>
+
+## Authorization Import/Export
+
+### Export Authorization
+
+Export the authorization key for backup or multi-DC scenarios:
+
+```php
+[$dcId, $authKey] = $MadelineProto->exportAuthorization();
+```
+
+From `Wrappers/Login.php:301`, this returns:
+- `$dcId`: The datacenter ID
+- `$authKey`: The authorization key (keep this secure!)
+
+### Import Authorization
+
+Import a previously exported authorization:
+
+```php
+$authorization = [
+    $dcId => $authKey
+];
+
+$MadelineProto->importAuthorization($authorization, $dcId);
+```
+
+<Warning>
+Authorization keys are sensitive credentials. Store them securely and never commit them to version control.
+</Warning>
+
+## 2FA Management
+
+Update two-factor authentication settings:
+
+```php
+// Enable 2FA
+$MadelineProto->update2fa([
+    'new_password' => 'secure_password',
+    'email' => 'recovery@example.com',
+    'hint' => 'My password hint'
+]);
+
+// Change password
+$MadelineProto->update2fa([
+    'password' => 'old_password',
+    'new_password' => 'new_secure_password'
+]);
+
+// Disable 2FA
+$MadelineProto->update2fa([
+    'password' => 'current_password',
+    'new_password' => ''
+]);
+```
+
+## Logout
+
+Properly log out and invalidate the session:
+
+```php
+$MadelineProto->logout();
+```
+
+This method (`Wrappers/Login.php:162`):
+- Calls `auth.logOut` on the API
+- Sets login state to `API::LOGGED_OUT`
+- Stops the event handler if running
+- Stops the IPC server
+
+## Complete Login Example
+
+Here's a complete user login flow:
+
+```php
+use danog\MadelineProto\API;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getAppInfo()
+    ->setApiId(12345)
+    ->setApiHash('your_api_hash');
+
+$MadelineProto = new API('user.madeline', $settings);
+
+// Start phone login
+$authorization = $MadelineProto->phoneLogin('+1234567890');
+
+// Get code from user
+$code = readline('Enter code: ');
+$authorization = $MadelineProto->completePhoneLogin($code);
+
+// Handle 2FA if enabled
+if ($authorization['_'] === 'account.password') {
+    echo "2FA enabled. Hint: " . ($authorization['hint'] ?? 'none') . "\n";
+    $password = readline('Enter password: ');
+    $authorization = $MadelineProto->complete2faLogin($password);
+}
+
+// Handle signup if needed
+if ($authorization['_'] === 'account.needSignup') {
+    $firstName = readline('Enter first name: ');
+    $authorization = $MadelineProto->completeSignup($firstName);
+}
+
+echo "Logged in successfully!\n";
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Event Handlers" icon="bolt" href="/concepts/event-handlers">
+    Set up event handlers to process updates
+  </Card>
+  <Card title="Async Operations" icon="arrows-spin" href="/concepts/async">
+    Understand asynchronous programming in MadelineProto
+  </Card>
+</CardGroup>

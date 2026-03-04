@@ -1,0 +1,303 @@
+---
+title: Plugin System
+description: Build modular event handlers with MadelineProto's plugin architecture
+---
+
+MadelineProto provides a powerful plugin system that allows you to create modular, reusable event handlers. Plugins extend the `PluginEventHandler` class and are automatically loaded from specified directories.
+
+## Creating a Plugin
+
+Plugins extend the `PluginEventHandler` class and must have filenames ending with `Plugin.php`.
+
+```php
+namespace MadelinePlugin\YourNamespace;
+
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+use danog\MadelineProto\PluginEventHandler;
+
+class PingPlugin extends PluginEventHandler
+{
+    private int $pingCount = 0;
+    private string $pongText = 'pong';
+
+    /**
+     * Properties returned by __sleep are automatically stored in the database.
+     */
+    public function __sleep(): array
+    {
+        return ['pingCount', 'pongText'];
+    }
+
+    /**
+     * Initialization logic.
+     */
+    public function onStart(): void
+    {
+        $this->logger("Plugin started!");
+        $this->sendMessageToAdmins("The ping plugin is online!");
+    }
+
+    /**
+     * Control whether the plugin is enabled.
+     */
+    public function isPluginEnabled(): bool
+    {
+        return true;
+    }
+
+    #[FilterCommand('ping')]
+    public function pingCommand(Incoming&Message $message): void
+    {
+        $message->reply($this->pongText);
+        $this->pingCount++;
+    }
+}
+```
+
+## Loading Plugins
+
+Specify plugin directories in your base event handler:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+
+class BaseHandler extends SimpleEventHandler
+{
+    /**
+     * Return a path or array of paths to plugin directories.
+     */
+    public static function getPluginPaths(): array|string|null
+    {
+        return 'plugins/';
+        // Or return an array for multiple directories:
+        // return ['plugins/', 'vendor/yourname/plugins/'];
+    }
+}
+
+// Start your bot with the base handler
+BaseHandler::startAndLoop('bot.madeline', $settings);
+```
+
+### Loading Specific Plugin Classes
+
+You can also load specific plugin classes directly:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use MadelinePlugin\YourNamespace\PingPlugin;
+use MadelinePlugin\YourNamespace\OnlinePlugin;
+
+class BaseHandler extends SimpleEventHandler
+{
+    public static function getPlugins(): array
+    {
+        return [
+            PingPlugin::class,
+            OnlinePlugin::class,
+        ];
+    }
+}
+```
+
+## Plugin Features
+
+### Persistent State
+
+Plugin properties returned by `__sleep()` are automatically persisted to your configured database backend (MySQL, PostgreSQL, Redis, or session file).
+
+```php
+class CounterPlugin extends PluginEventHandler
+{
+    private int $count = 0;
+    private array $userStats = [];
+
+    public function __sleep(): array
+    {
+        return ['count', 'userStats'];
+    }
+}
+```
+
+### Cron Jobs
+
+Plugins support periodic tasks using the `#[Cron]` attribute:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+
+class MonitorPlugin extends PluginEventHandler
+{
+    #[Cron(period: 60.0)]
+    public function everyMinute(): void
+    {
+        $this->sendMessageToAdmins("Status check: All systems operational");
+    }
+
+    #[Cron(period: 3600.0)]
+    public function everyHour(): void
+    {
+        // Cleanup, stats, etc.
+    }
+}
+```
+
+### Filters and Handlers
+
+Plugins have access to the full filter system:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Filter\FilterText;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+class CommandPlugin extends PluginEventHandler
+{
+    #[FilterCommand('start')]
+    public function startCommand(Incoming&Message $message): void
+    {
+        $message->reply("Welcome!");
+    }
+
+    #[FilterCommand('admin')]
+    public function adminCommand(Incoming&Message&FromAdmin $message): void
+    {
+        $message->reply("Admin command executed");
+    }
+
+    #[FilterText('ping')]
+    public function textHandler(Incoming&Message $message): void
+    {
+        $message->reply("pong");
+    }
+}
+```
+
+## Conditional Plugin Loading
+
+Control plugin activation based on runtime conditions:
+
+```php
+class OnlinePlugin extends PluginEventHandler
+{
+    public function isPluginEnabled(): bool
+    {
+        // Only enable for user accounts (not bots)
+        return $this->getSelf()['bot'] === false;
+    }
+}
+```
+
+## External Plugin Control
+
+You can interact with running plugins via IPC:
+
+```php
+use danog\MadelineProto\API;
+use MadelinePlugin\YourNamespace\PingPlugin;
+
+$api = new API('bot.madeline');
+$plugin = $api->getPlugin(PingPlugin::class);
+
+// Call plugin methods
+$plugin->setPongText('UwU');
+```
+
+This automatically connects to the running bot instance and calls the specified method.
+
+## Built-in Plugins
+
+MadelineProto includes a restart plugin:
+
+```php
+use danog\MadelineProto\EventHandler\Plugin\RestartPlugin;
+
+class MyHandler extends SimpleEventHandler
+{
+    public static function getPlugins(): array
+    {
+        return [RestartPlugin::class];
+    }
+}
+```
+
+This provides a `/restart` command for admins to restart the bot and apply changes.
+
+## Example: Online Status Plugin
+
+```php
+namespace MadelinePlugin\Danogentili;
+
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\PluginEventHandler;
+
+class OnlinePlugin extends PluginEventHandler
+{
+    private bool $isOnline = true;
+
+    public function __sleep(): array
+    {
+        return ['isOnline'];
+    }
+
+    public function isPluginEnabled(): bool
+    {
+        // Only users can be online/offline
+        return $this->getSelf()['bot'] === false;
+    }
+
+    #[Cron(period: 60.0)]
+    public function cron(): void
+    {
+        $this->account->updateStatus(offline: !$this->isOnline);
+    }
+
+    #[FilterCommand('online')]
+    public function toggleOnline(Incoming&Message&FromAdmin $message): void
+    {
+        $this->isOnline = true;
+    }
+
+    #[FilterCommand('offline')]
+    public function toggleOffline(Incoming&Message&FromAdmin $message): void
+    {
+        $this->isOnline = false;
+    }
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Modular Design" icon="puzzle-piece">
+    Keep plugins focused on single responsibilities for better reusability
+  </Card>
+  <Card title="State Management" icon="database">
+    Use `__sleep()` to persist only necessary data
+  </Card>
+  <Card title="Error Handling" icon="shield-halved">
+    Handle exceptions gracefully within plugin methods
+  </Card>
+  <Card title="Documentation" icon="book">
+    Document plugin requirements and configuration options
+  </Card>
+</CardGroup>
+
+## Plugin Limitations
+
+<Warning>
+  Plugins **cannot** load other plugins using `getPluginPaths()`. To compose plugins, use the `getPlugins()` method in your base event handler.
+</Warning>
+
+## See Also
+
+- [Event Handlers](/concepts/event-handlers)
+- [Filters](/concepts/filters)
+- [Database Configuration](/advanced/database)

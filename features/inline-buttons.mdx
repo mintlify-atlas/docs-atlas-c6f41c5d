@@ -1,0 +1,646 @@
+---
+title: Inline Buttons & Keyboards
+description: Create interactive bot interfaces with inline buttons, reply keyboards, and handle button callbacks
+---
+
+MadelineProto provides comprehensive support for creating interactive bot interfaces using inline buttons and reply keyboards. Handle button clicks, create complex menus, and build rich user experiences.
+
+## Keyboard Types
+
+MadelineProto supports two types of keyboards:
+
+1. **Inline Keyboards** - Buttons attached to messages
+2. **Reply Keyboards** - Custom keyboard layouts
+
+## Creating Inline Keyboards
+
+### Basic Inline Buttons
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\ParseMode;
+
+public function sendInlineKeyboard(Message $message): void
+{
+    $message->reply(
+        message: "Choose an option:",
+        parseMode: ParseMode::TEXT,
+        replyMarkup: [
+            'inline_keyboard' => [
+                // First row
+                [
+                    ['text' => 'Button 1', 'callback_data' => 'btn1'],
+                    ['text' => 'Button 2', 'callback_data' => 'btn2'],
+                ],
+                // Second row
+                [
+                    ['text' => 'Button 3', 'callback_data' => 'btn3'],
+                ],
+            ],
+        ]
+    );
+}
+```
+
+### URL Buttons
+
+```php
+public function sendUrlButtons(Message $message): void
+{
+    $message->reply(
+        message: "Visit our links:",
+        replyMarkup: [
+            'inline_keyboard' => [
+                [
+                    ['text' => '🌐 Website', 'url' => 'https://example.com'],
+                ],
+                [
+                    ['text' => '💬 Telegram Channel', 'url' => 'https://t.me/channel'],
+                ],
+            ],
+        ]
+    );
+}
+```
+
+### Callback Buttons
+
+```php
+public function sendCallbackButtons(Message $message): void
+{
+    $message->reply(
+        message: "Rate our service:",
+        replyMarkup: [
+            'inline_keyboard' => [
+                [
+                    ['text' => '⭐', 'callback_data' => 'rate_1'],
+                    ['text' => '⭐⭐', 'callback_data' => 'rate_2'],
+                    ['text' => '⭐⭐⭐', 'callback_data' => 'rate_3'],
+                    ['text' => '⭐⭐⭐⭐', 'callback_data' => 'rate_4'],
+                    ['text' => '⭐⭐⭐⭐⭐', 'callback_data' => 'rate_5'],
+                ],
+            ],
+        ]
+    );
+}
+```
+
+### Switch Inline Query Buttons
+
+```php
+public function sendSwitchButtons(Message $message): void
+{
+    $message->reply(
+        message: "Share via inline query:",
+        replyMarkup: [
+            'inline_keyboard' => [
+                [
+                    [
+                        'text' => 'Share in this chat',
+                        'switch_inline_query_current_chat' => 'share'
+                    ],
+                ],
+                [
+                    [
+                        'text' => 'Share in another chat',
+                        'switch_inline_query' => 'share'
+                    ],
+                ],
+            ],
+        ]
+    );
+}
+```
+
+## Handling Button Callbacks
+
+Handle button clicks using callback query events:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Query\ButtonQuery;
+
+#[Handler]
+public function handleButtonClick(ButtonQuery $query): void
+{
+    // Get callback data
+    $data = $query->data;
+    $userId = $query->userId;
+    
+    // Handle different callbacks
+    match ($data) {
+        'btn1' => $this->handleButton1($query),
+        'btn2' => $this->handleButton2($query),
+        'btn3' => $this->handleButton3($query),
+        default => $query->answer("Unknown button")
+    };
+}
+
+private function handleButton1(ButtonQuery $query): void
+{
+    // Answer with popup
+    $query->answer(
+        message: "You clicked Button 1!",
+        alert: true  // Show as alert popup
+    );
+}
+
+private function handleButton2(ButtonQuery $query): void
+{
+    // Answer with toast notification
+    $query->answer(
+        message: "Button 2 clicked",
+        alert: false  // Show as toast
+    );
+}
+
+private function handleButton3(ButtonQuery $query): void
+{
+    // Answer with URL
+    $query->answer(
+        message: "Opening URL...",
+        url: "https://example.com"
+    );
+}
+```
+
+## CallbackQuery Class
+
+### Properties
+
+```php
+#[Handler]
+public function analyzeCallback(ButtonQuery $query): void
+{
+    $queryId = $query->queryId;           // Query ID
+    $userId = $query->userId;             // User who clicked
+    $chatInstance = $query->chatInstance; // Chat instance
+    $data = $query->data;                 // Callback data
+    
+    $this->logger("User $userId clicked: $data");
+}
+```
+
+### Answer Method
+
+```php
+$query->answer(
+    message: "Response message",
+    alert: false,           // true = popup, false = toast
+    url: null,              // URL to open
+    cacheTime: 300          // Cache time in seconds
+);
+```
+
+## Reply Keyboards
+
+Create custom keyboard layouts:
+
+```php
+public function sendReplyKeyboard(Message $message): void
+{
+    $message->reply(
+        message: "Choose a command:",
+        replyMarkup: [
+            'keyboard' => [
+                // First row
+                [
+                    ['text' => '/start'],
+                    ['text' => '/help'],
+                ],
+                // Second row
+                [
+                    ['text' => '/settings'],
+                ],
+            ],
+            'resize_keyboard' => true,  // Resize to fit
+            'one_time_keyboard' => true, // Hide after use
+        ]
+    );
+}
+```
+
+### Request Contact Button
+
+```php
+public function requestContact(Message $message): void
+{
+    $message->reply(
+        message: "Share your contact:",
+        replyMarkup: [
+            'keyboard' => [
+                [
+                    [
+                        'text' => '📱 Share Phone Number',
+                        'request_contact' => true
+                    ],
+                ],
+            ],
+            'resize_keyboard' => true,
+        ]
+    );
+}
+```
+
+### Request Location Button
+
+```php
+public function requestLocation(Message $message): void
+{
+    $message->reply(
+        message: "Share your location:",
+        replyMarkup: [
+            'keyboard' => [
+                [
+                    [
+                        'text' => '📍 Share Location',
+                        'request_location' => true
+                    ],
+                ],
+            ],
+            'resize_keyboard' => true,
+        ]
+    );
+}
+```
+
+### Remove Keyboard
+
+```php
+public function removeKeyboard(Message $message): void
+{
+    $message->reply(
+        message: "Keyboard removed",
+        replyMarkup: [
+            'remove_keyboard' => true,
+        ]
+    );
+}
+```
+
+## Working with Keyboards
+
+### Access Keyboard from Message
+
+```php
+use danog\MadelineProto\EventHandler\Keyboard\InlineKeyboard;
+use danog\MadelineProto\EventHandler\Keyboard\ReplyKeyboard;
+
+#[Handler]
+public function analyzeKeyboard(Message $message): void
+{
+    $keyboard = $message->keyboard;
+    
+    if ($keyboard instanceof InlineKeyboard) {
+        $this->logger("Message has inline keyboard");
+        
+        // Access buttons
+        foreach ($keyboard->buttons as $row) {
+            foreach ($row as $button) {
+                $this->logger("Button: {$button->label}");
+            }
+        }
+    } elseif ($keyboard instanceof ReplyKeyboard) {
+        $this->logger("Message has reply keyboard");
+    }
+}
+```
+
+### Press Button by Label
+
+```php
+public function pressButton(Message $message): void
+{
+    if ($message->keyboard) {
+        // Press button by label
+        $message->keyboard->press(
+            label: 'Button 1',
+            waitForResult: true
+        );
+    }
+}
+```
+
+### Press Button by Coordinates
+
+```php
+public function pressByPosition(Message $message): void
+{
+    if ($message->keyboard) {
+        // Press button at row 0, column 1
+        $message->keyboard->pressByCoordinates(
+            row: 0,
+            column: 1,
+            waitForResult: true
+        );
+    }
+}
+```
+
+## Button Class
+
+The `Button` class represents a clickable button:
+
+```php
+use danog\MadelineProto\TL\Types\Button;
+
+// Button properties
+$button->label;  // Button text
+
+// Click button
+$result = $button->click(
+    donotwait: false  // Wait for result
+);
+```
+
+## Advanced Examples
+
+### Paginated Menu
+
+```php
+class PaginatedMenu
+{
+    private int $currentPage = 0;
+    private int $itemsPerPage = 5;
+    
+    public function showPage(Message $message, int $page): void
+    {
+        $items = $this->getItems();
+        $totalPages = (int)ceil(count($items) / $this->itemsPerPage);
+        
+        $start = $page * $this->itemsPerPage;
+        $pageItems = array_slice($items, $start, $this->itemsPerPage);
+        
+        // Build buttons
+        $buttons = [];
+        foreach ($pageItems as $i => $item) {
+            $buttons[] = [[
+                'text' => $item,
+                'callback_data' => "item_" . ($start + $i)
+            ]];
+        }
+        
+        // Navigation buttons
+        $nav = [];
+        if ($page > 0) {
+            $nav[] = ['text' => '◀️ Prev', 'callback_data' => 'page_' . ($page - 1)];
+        }
+        $nav[] = ['text' => "📄 {$page + 1}/{$totalPages}", 'callback_data' => 'noop'];
+        if ($page < $totalPages - 1) {
+            $nav[] = ['text' => 'Next ▶️', 'callback_data' => 'page_' . ($page + 1)];
+        }
+        $buttons[] = $nav;
+        
+        $message->reply(
+            message: "Page " . ($page + 1) . " of $totalPages",
+            replyMarkup: ['inline_keyboard' => $buttons]
+        );
+    }
+    
+    #[Handler]
+    public function handlePageCallback(ButtonQuery $query): void
+    {
+        if (str_starts_with($query->data, 'page_')) {
+            $page = (int)substr($query->data, 5);
+            
+            // Edit message with new page
+            $this->editMessage(
+                peer: $query->chatId,
+                id: $query->messageId,
+                message: "Page " . ($page + 1),
+                replyMarkup: $this->buildPageKeyboard($page)
+            );
+            
+            $query->answer();
+        }
+    }
+}
+```
+
+### Dynamic Keyboard Builder
+
+```php
+class KeyboardBuilder
+{
+    private array $rows = [];
+    
+    public function addButton(string $text, string $callback, int $row = null): self
+    {
+        if ($row === null) {
+            $row = count($this->rows);
+        }
+        
+        if (!isset($this->rows[$row])) {
+            $this->rows[$row] = [];
+        }
+        
+        $this->rows[$row][] = [
+            'text' => $text,
+            'callback_data' => $callback
+        ];
+        
+        return $this;
+    }
+    
+    public function addUrl(string $text, string $url, int $row = null): self
+    {
+        if ($row === null) {
+            $row = count($this->rows);
+        }
+        
+        if (!isset($this->rows[$row])) {
+            $this->rows[$row] = [];
+        }
+        
+        $this->rows[$row][] = [
+            'text' => $text,
+            'url' => $url
+        ];
+        
+        return $this;
+    }
+    
+    public function build(): array
+    {
+        return ['inline_keyboard' => array_values($this->rows)];
+    }
+}
+
+// Usage
+public function buildCustomKeyboard(Message $message): void
+{
+    $keyboard = (new KeyboardBuilder)
+        ->addButton('Option 1', 'opt1', 0)
+        ->addButton('Option 2', 'opt2', 0)
+        ->addButton('Option 3', 'opt3', 1)
+        ->addUrl('Website', 'https://example.com', 2)
+        ->build();
+    
+    $message->reply(
+        message: "Custom keyboard:",
+        replyMarkup: $keyboard
+    );
+}
+```
+
+### Menu System
+
+```php
+class MenuSystem
+{
+    #[FilterCommand('menu')]
+    public function showMainMenu(Message $message): void
+    {
+        $message->reply(
+            message: "📋 **Main Menu**",
+            parseMode: ParseMode::MARKDOWN,
+            replyMarkup: [
+                'inline_keyboard' => [
+                    [
+                        ['text' => '⚙️ Settings', 'callback_data' => 'menu_settings'],
+                        ['text' => 'ℹ️ About', 'callback_data' => 'menu_about'],
+                    ],
+                    [
+                        ['text' => '📊 Statistics', 'callback_data' => 'menu_stats'],
+                    ],
+                    [
+                        ['text' => '❓ Help', 'callback_data' => 'menu_help'],
+                    ],
+                ],
+            ]
+        );
+    }
+    
+    #[Handler]
+    public function handleMenuCallback(ButtonQuery $query): void
+    {
+        match ($query->data) {
+            'menu_settings' => $this->showSettings($query),
+            'menu_about' => $this->showAbout($query),
+            'menu_stats' => $this->showStats($query),
+            'menu_help' => $this->showHelp($query),
+            'back_main' => $this->backToMain($query),
+            default => null
+        };
+    }
+    
+    private function showSettings(ButtonQuery $query): void
+    {
+        $this->editMessageText(
+            peer: $query->chatId,
+            id: $query->messageId,
+            message: "⚙️ **Settings**\n\nChoose an option:",
+            parseMode: ParseMode::MARKDOWN,
+            replyMarkup: [
+                'inline_keyboard' => [
+                    [
+                        ['text' => '🔔 Notifications', 'callback_data' => 'settings_notif'],
+                    ],
+                    [
+                        ['text' => '🌐 Language', 'callback_data' => 'settings_lang'],
+                    ],
+                    [
+                        ['text' => '🔙 Back', 'callback_data' => 'back_main'],
+                    ],
+                ],
+            ]
+        );
+        
+        $query->answer();
+    }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Callback Data Limits">
+    Callback data is limited to 64 bytes:
+    
+    ```php
+    // Bad - too long
+    'callback_data' => 'very_long_string_that_exceeds_64_bytes...'
+    
+    // Good - use short identifiers
+    'callback_data' => 'u_123'  // user_123
+    ```
+  </Accordion>
+  
+  <Accordion title="Always Answer Callbacks">
+    Always call `answer()` on callbacks to remove loading state:
+    
+    ```php
+    #[Handler]
+    public function handleCallback(ButtonQuery $query): void
+    {
+        // Process callback
+        $this->processAction($query->data);
+        
+        // Always answer
+        $query->answer("Done!");
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Keyboard Layout">
+    Design keyboards for usability:
+    - Maximum 8 buttons per row
+    - Maximum 100 buttons total
+    - Use emojis for visual appeal
+    - Group related buttons together
+  </Accordion>
+  
+  <Accordion title="Button Text">
+    Keep button text concise:
+    - 1-2 words ideal
+    - Use clear action verbs
+    - Add emojis for context
+  </Accordion>
+</AccordionGroup>
+
+## Example: Complete Interactive Bot
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Query\ButtonQuery;
+use danog\MadelineProto\ParseMode;
+
+class InteractiveBot extends SimpleEventHandler
+{
+    #[FilterCommand('start')]
+    public function start(Message $message): void
+    {
+        $message->reply(
+            message: "👋 Welcome! Choose an option:",
+            replyMarkup: [
+                'inline_keyboard' => [
+                    [
+                        ['text' => '🎯 Features', 'callback_data' => 'features'],
+                        ['text' => 'ℹ️ About', 'callback_data' => 'about'],
+                    ],
+                    [
+                        ['text' => '⚙️ Settings', 'callback_data' => 'settings'],
+                    ],
+                ],
+            ]
+        );
+    }
+    
+    #[Handler]
+    public function handleButtons(ButtonQuery $query): void
+    {
+        match($query->data) {
+            'features' => $query->answer("✨ Browse our amazing features!", alert: true),
+            'about' => $query->answer("Made with MadelineProto", alert: false),
+            'settings' => $this->showSettings($query),
+            default => $query->answer("Unknown action")
+        };
+    }
+    
+    private function showSettings(ButtonQuery $query): void
+    {
+        $query->answer("⚙️ Settings opened");
+    }
+}
+```

@@ -1,0 +1,554 @@
+---
+title: File Management
+description: Upload, download, and manage files with MadelineProto's parallelized file handling system
+---
+
+MadelineProto provides fully parallelized methods to upload and download files of any size, with support for Bot API file IDs, direct uploads by URL, progress tracking, and file streaming.
+
+## Supported File Types
+
+MadelineProto supports all Telegram media types:
+
+- **Photos** - Images up to 10MB
+- **Documents** - Any file type up to 2GB (4GB for premium)
+- **Videos** - Video files with optional streaming
+- **Audio** - Audio files with metadata
+- **Voice** - Voice messages
+- **Stickers** - Static and animated stickers
+- **GIFs** - Animated GIFs
+- **Round Videos** - Video messages
+
+## File Input Types
+
+Files can be specified using multiple input types:
+
+```php
+use danog\MadelineProto\LocalFile;
+use danog\MadelineProto\RemoteUrl;
+use danog\MadelineProto\BotApiFileId;
+use Amp\ByteStream\ReadableStream;
+
+// Local file path
+$file = new LocalFile('/path/to/file.pdf');
+
+// Remote URL (will be downloaded)
+$file = new RemoteUrl('https://example.com/image.jpg');
+
+// Bot API file ID
+$file = new BotApiFileId('AgACAgIAAxkBAAI...');
+
+// Readable stream
+$file = $stream; // Any ReadableStream implementation
+
+// Message (reuse media from another message)
+$file = $message; // Message object with media
+```
+
+## Sending Photos
+
+### Basic Photo Upload
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\LocalFile;
+use danog\MadelineProto\ParseMode;
+
+#[Handler]
+public function sendPhoto(Incoming&Message $message): void
+{
+    // Simple photo send
+    $message->replyPhoto(
+        file: new LocalFile('photo.jpg'),
+        caption: "Here's your photo!"
+    );
+}
+```
+
+### Photo with Options
+
+```php
+public function sendPhotoAdvanced(Message $message): void
+{
+    $this->sendPhoto(
+        peer: $message->chatId,
+        file: new LocalFile('photo.jpg'),
+        caption: "**Photo** with _formatting_",
+        parseMode: ParseMode::MARKDOWN,
+        callback: function($progress, $speed, $time) {
+            $this->logger("Upload: {$progress}% at {$speed}Mbps");
+        },
+        ttl: 10,              // Self-destruct after 10 seconds
+        spoiler: true,        // Mark as spoiler
+        silent: true,         // No notification
+        noForwards: true,     // Disable forwarding
+        forceResend: false    // Reuse if already uploaded
+    );
+}
+```
+
+## Sending Documents
+
+### Basic Document Upload
+
+```php
+#[Handler]
+public function sendDocument(Incoming&Message $message): void
+{
+    $message->replyDocument(
+        file: new LocalFile('document.pdf'),
+        caption: "Your document",
+        fileName: 'My Document.pdf'
+    );
+}
+```
+
+### Document with Thumbnail
+
+```php
+public function sendDocumentWithThumb(Message $message): void
+{
+    $this->sendDocument(
+        peer: $message->chatId,
+        file: new LocalFile('video.mp4'),
+        thumb: new LocalFile('thumbnail.jpg'),
+        caption: "Video file",
+        fileName: 'video.mp4',
+        mimeType: 'video/mp4',
+        callback: function($progress, $speed, $time) {
+            $this->logger("Uploading: $progress%");
+        }
+    );
+}
+```
+
+## Sending Videos
+
+```php
+public function sendVideo(Message $message): void
+{
+    $message->replyVideo(
+        file: new LocalFile('video.mp4'),
+        thumb: new LocalFile('thumb.jpg'),
+        caption: "**Video** caption",
+        parseMode: ParseMode::MARKDOWN,
+        duration: 60,              // Duration in seconds
+        width: 1920,               // Video width
+        height: 1080,              // Video height
+        supportsStreaming: true,   // Enable streaming
+        spoiler: false,            // Not a spoiler
+        roundMessage: false,       // Not a round video
+        noSound: false             // Has sound
+    );
+}
+```
+
+## Sending Audio
+
+```php
+public function sendAudio(Message $message): void
+{
+    $message->replyAudio(
+        file: new LocalFile('song.mp3'),
+        thumb: new LocalFile('album-art.jpg'),
+        caption: "Great song!",
+        duration: 180,          // Duration in seconds
+        title: "Song Title",    // Track title
+        performer: "Artist"     // Artist name
+    );
+}
+```
+
+## Sending Voice Messages
+
+```php
+public function sendVoice(Message $message): void
+{
+    $message->replyVoice(
+        file: new LocalFile('voice.ogg'),
+        caption: "Voice message",
+        duration: 15,           // Duration in seconds
+        waveform: [0, 5, 10, 15, 20, 25] // Optional waveform data
+    );
+}
+```
+
+## Sending GIFs
+
+```php
+public function sendGif(Message $message): void
+{
+    $message->replyGif(
+        file: new LocalFile('animation.gif'),
+        caption: "Funny animation",
+        thumb: new LocalFile('thumb.jpg'),
+        spoiler: false
+    );
+}
+```
+
+## Sending Stickers
+
+```php
+public function sendSticker(Message $message): void
+{
+    $message->replySticker(
+        file: new LocalFile('sticker.webp'),
+        mimeType: 'image/webp',
+        emoji: '😀'
+    );
+}
+```
+
+## Downloading Files
+
+MadelineProto provides multiple ways to download files:
+
+### Download to Directory
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\HasMedia;
+
+#[Handler]
+public function downloadToDir(Incoming&Message&HasMedia $message): void
+{
+    // Download to current directory
+    $path = $message->media->downloadToDir();
+    $message->reply("Downloaded to: $path");
+    
+    // Download to specific directory
+    $path = $message->media->downloadToDir('/tmp/downloads');
+    
+    // With progress callback
+    $path = $message->media->downloadToDir(
+        dir: '/tmp/downloads',
+        cb: function($progress, $speed, $time) {
+            $this->logger("Download: {$progress}% at {$speed}Mbps");
+        }
+    );
+}
+```
+
+### Download to Specific File
+
+```php
+#[Handler]
+public function downloadToFile(Incoming&Message&HasMedia $message): void
+{
+    $path = $message->media->downloadToFile(
+        file: '/tmp/myfile.jpg',
+        cb: function($progress, $speed, $time) {
+            $this->logger("Download: $progress%");
+        }
+    );
+    
+    $message->reply("Downloaded to: $path");
+}
+```
+
+### Download as Stream
+
+```php
+#[Handler]
+public function downloadStream(Incoming&Message&HasMedia $message): void
+{
+    // Get readable stream
+    $stream = $message->media->getStream(
+        cb: function($progress, $speed, $time) {
+            $this->logger("Streaming: $progress%");
+        },
+        offset: 0,        // Start offset
+        end: -1           // End offset (-1 = end of file)
+    );
+    
+    // Read from stream
+    while (($chunk = $stream->read()) !== null) {
+        // Process chunk
+    }
+}
+```
+
+### Get Download Link
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+
+#[FilterCommand('dl')]
+public function getDownloadLink(Message $message): void
+{
+    $reply = $message->getReply(Message::class);
+    
+    if (!$reply?->media) {
+        $message->reply("Reply to a media message!");
+        return;
+    }
+    
+    // Get download link (works up to 4GB)
+    $link = $reply->media->getDownloadLink();
+    
+    $message->reply("Download link: $link");
+}
+```
+
+## Media Properties
+
+Access media information:
+
+```php
+#[Handler]
+public function analyzeMedia(Incoming&Message&HasMedia $message): void
+{
+    $media = $message->media;
+    
+    // Basic properties
+    $size = $media->size;              // File size in bytes
+    $fileName = $media->fileName;      // File name
+    $fileExt = $media->fileExt;        // File extension
+    $mimeType = $media->mimeType;      // MIME type
+    $creationDate = $media->creationDate; // Creation timestamp
+    
+    // Bot API file IDs
+    $fileId = $media->botApiFileId;         // File ID
+    $uniqueId = $media->botApiFileUniqueId; // Unique file ID
+    
+    // Flags
+    $isProtected = $media->protected;  // Content protected?
+    $isSpoiler = $media->spoiler;      // Is spoiler?
+    $isEncrypted = $media->encrypted;  // From secret chat?
+    
+    // TTL (Time To Live)
+    $ttl = $media->ttl;                // Self-destruct timer
+    
+    $this->logger("File: $fileName ($size bytes)");
+}
+```
+
+## Media Type-Specific Properties
+
+### Photo Properties
+
+```php
+use danog\MadelineProto\EventHandler\Media\Photo;
+
+#[Handler]
+public function handlePhoto(Incoming&Message $message): void
+{
+    if ($message->media instanceof Photo) {
+        $photo = $message->media;
+        
+        // Photo has thumbnails
+        $thumbs = $photo->thumbs;
+        
+        $message->reply("Photo size: {$photo->size} bytes");
+    }
+}
+```
+
+### Video Properties
+
+```php
+use danog\MadelineProto\EventHandler\Media\Video;
+
+#[Handler]
+public function handleVideo(Incoming&Message $message): void
+{
+    if ($message->media instanceof Video) {
+        $video = $message->media;
+        
+        $duration = $video->duration;    // Duration in seconds
+        $width = $video->width;          // Video width
+        $height = $video->height;        // Video height
+        $supportsStreaming = $video->supportsStreaming;
+        
+        $message->reply("Video: {$width}x{$height}, {$duration}s");
+    }
+}
+```
+
+### Audio Properties
+
+```php
+use danog\MadelineProto\EventHandler\Media\Audio;
+
+#[Handler]
+public function handleAudio(Incoming&Message $message): void
+{
+    if ($message->media instanceof Audio) {
+        $audio = $message->media;
+        
+        $duration = $audio->duration;    // Duration in seconds
+        $title = $audio->title;          // Track title
+        $performer = $audio->performer;  // Artist name
+        
+        $message->reply("$performer - $title ($duration seconds)");
+    }
+}
+```
+
+## File Upload Progress
+
+Track upload progress with callbacks:
+
+```php
+public function uploadWithProgress(Message $message): void
+{
+    $startTime = time();
+    
+    $this->sendDocument(
+        peer: $message->chatId,
+        file: new LocalFile('large-file.zip'),
+        caption: "Uploading large file...",
+        callback: function($progress, $speed, $elapsed) use ($startTime) {
+            // $progress: percentage (0-100)
+            // $speed: speed in Mbps
+            // $elapsed: time elapsed in seconds
+            
+            $this->logger(
+                "Progress: {$progress}% | " .
+                "Speed: {$speed}Mbps | " .
+                "Time: {$elapsed}s"
+            );
+            
+            // Estimate remaining time
+            if ($progress > 0) {
+                $remaining = ($elapsed / $progress) * (100 - $progress);
+                $this->logger("ETA: {$remaining}s");
+            }
+        }
+    );
+}
+```
+
+## Reusing Uploaded Files
+
+Reuse media from sent messages:
+
+```php
+public function reuseMedia(Message $message): void
+{
+    // Send a photo
+    $sent = $this->sendPhoto(
+        peer: $message->chatId,
+        file: new LocalFile('photo.jpg'),
+        caption: "Original"
+    );
+    
+    // Reuse the same photo (no re-upload)
+    $this->sendPhoto(
+        peer: $message->chatId,
+        file: $sent,  // Use the sent message
+        caption: "Reused photo"
+    );
+}
+```
+
+## Working with URLs
+
+Upload files directly from URLs:
+
+```php
+use danog\MadelineProto\RemoteUrl;
+
+public function uploadFromUrl(Message $message): void
+{
+    // Download and send
+    $message->replyPhoto(
+        file: new RemoteUrl('https://example.com/image.jpg'),
+        caption: "Downloaded from URL"
+    );
+    
+    // Works with any file type
+    $message->replyDocument(
+        file: new RemoteUrl('https://example.com/document.pdf'),
+        caption: "PDF from URL"
+    );
+}
+```
+
+## Bot API File IDs
+
+Use Bot API file IDs:
+
+```php
+use danog\MadelineProto\BotApiFileId;
+
+public function useBotApiFileId(Message $message): void
+{
+    // Use Bot API file ID
+    $message->replyPhoto(
+        file: new BotApiFileId('AgACAgIAAxkBAAI...'),
+        caption: "Photo from file ID"
+    );
+    
+    // Get Bot API file ID from media
+    if ($message->media) {
+        $fileId = $message->media->botApiFileId;
+        $uniqueId = $message->media->botApiFileUniqueId;
+        
+        $this->logger("File ID: $fileId");
+    }
+}
+```
+
+## Secret Chat Files
+
+Files in secret chats are end-to-end encrypted:
+
+```php
+use danog\MadelineProto\EventHandler\Message\SecretMessage;
+
+#[Handler]
+public function handleSecretFile(Incoming&SecretMessage $message): void
+{
+    if ($message->media) {
+        // Download encrypted file
+        $path = $message->media->downloadToDir('/tmp');
+        
+        $message->reply("Decrypted and saved to: $path");
+        
+        // Media is automatically decrypted
+        $isEncrypted = $message->media->encrypted; // true
+    }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="File Size Limits">
+    Respect Telegram's file size limits:
+    - Photos: 10 MB maximum
+    - Documents: 2 GB (4 GB for Premium)
+    - Always check file size before uploading
+    
+    ```php
+    $fileSize = filesize($path);
+    if ($fileSize > 2 * 1024 * 1024 * 1024) {
+        $message->reply("File too large!");
+        return;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Progress Callbacks">
+    Use progress callbacks for large files:
+    - Update user on upload/download status
+    - Show estimated time remaining
+    - Allow cancellation if needed
+  </Accordion>
+  
+  <Accordion title="File Reuse">
+    Reuse uploaded files when possible:
+    - Saves bandwidth and time
+    - Use message objects or Bot API file IDs
+    - Set `forceResend: false` to enable reuse
+  </Accordion>
+  
+  <Accordion title="Streaming">
+    Enable streaming for videos:
+    - Set `supportsStreaming: true`
+    - Better user experience
+    - Videos can be played before fully downloaded
+  </Accordion>
+</AccordionGroup>

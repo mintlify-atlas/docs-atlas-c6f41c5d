@@ -1,0 +1,350 @@
+---
+title: Methods Overview
+description: Overview of available Telegram API methods in MadelineProto
+---
+
+# Methods Overview
+
+MadelineProto provides access to all Telegram API methods through namespaced classes, making it easy to interact with the Telegram platform.
+
+## API Namespaces
+
+All API methods are organized into namespaces that correspond to Telegram's API structure.
+
+### Available Namespaces
+
+<ResponseField name="messages" type="\danog\MadelineProto\Namespace\Messages">
+  Message operations - sending, editing, deleting, forwarding
+</ResponseField>
+
+<ResponseField name="channels" type="\danog\MadelineProto\Namespace\Channels">
+  Channel management - create, edit, join, leave channels
+</ResponseField>
+
+<ResponseField name="users" type="\danog\MadelineProto\Namespace\Users">
+  User operations - get user info, full user data
+</ResponseField>
+
+<ResponseField name="contacts" type="\danog\MadelineProto\Namespace\Contacts">
+  Contact management - add, delete, block, import contacts
+</ResponseField>
+
+<ResponseField name="account" type="\danog\MadelineProto\Namespace\Account">
+  Account settings - privacy, profile, password, sessions
+</ResponseField>
+
+<ResponseField name="auth" type="\danog\MadelineProto\Namespace\Auth">
+  Authentication - login, logout, sign up, 2FA
+</ResponseField>
+
+<ResponseField name="bots" type="\danog\MadelineProto\Namespace\Bots">
+  Bot operations - inline queries, callback answers, commands
+</ResponseField>
+
+<ResponseField name="photos" type="\danog\MadelineProto\Namespace\Photos">
+  Photo operations - upload, delete, update profile photos
+</ResponseField>
+
+<ResponseField name="upload" type="\danog\MadelineProto\Namespace\Upload">
+  File upload operations
+</ResponseField>
+
+<ResponseField name="help" type="\danog\MadelineProto\Namespace\Help">
+  Helper methods - get config, app update, support
+</ResponseField>
+
+<ResponseField name="payments" type="\danog\MadelineProto\Namespace\Payments">
+  Payment operations - invoices, shipping, validation
+</ResponseField>
+
+<ResponseField name="stickers" type="\danog\MadelineProto\Namespace\Stickers">
+  Sticker operations - create, add, remove sticker sets
+</ResponseField>
+
+<ResponseField name="phone" type="\danog\MadelineProto\Namespace\Phone">
+  Phone call operations
+</ResponseField>
+
+<ResponseField name="stats" type="\danog\MadelineProto\Namespace\Stats">
+  Statistics for channels and megagroups
+</ResponseField>
+
+<ResponseField name="folders" type="\danog\MadelineProto\Namespace\Folders">
+  Chat folder operations
+</ResponseField>
+
+<ResponseField name="stories" type="\danog\MadelineProto\Namespace\Stories">
+  Story operations (new feature)
+</ResponseField>
+
+<ResponseField name="premium" type="\danog\MadelineProto\Namespace\Premium">
+  Premium features
+</ResponseField>
+
+## Usage
+
+### In EventHandler
+
+All namespaces are directly accessible:
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\Message;
+
+class MyBot extends EventHandler
+{
+    public function onUpdateNewMessage(Message $message): void
+    {
+        // Access messages namespace
+        $this->messages->sendMessage([
+            'peer' => $message->chatId,
+            'message' => 'Hello!',
+        ]);
+        
+        // Access users namespace
+        $user = $this->users->getFullUser(['id' => $message->senderId]);
+        
+        // Access channels namespace
+        $this->channels->joinChannel(['channel' => '@mychannel']);
+    }
+}
+```
+
+### In API Instance
+
+```php
+use danog\MadelineProto\API;
+
+$MadelineProto = new API('session.madeline');
+
+// Send a message
+$MadelineProto->messages->sendMessage([
+    'peer' => '@username',
+    'message' => 'Hello from MadelineProto!',
+]);
+
+// Get user info
+$user = $MadelineProto->users->getFullUser(['id' => 'username']);
+
+// Get channel info
+$channel = $MadelineProto->channels->getFullChannel(['channel' => '@channel']);
+```
+
+## Method Call Styles
+
+### Array Parameters
+
+The traditional MTProto style:
+
+```php
+$this->messages->sendMessage([
+    'peer' => $chatId,
+    'message' => 'Hello',
+    'parse_mode' => 'Markdown',
+]);
+```
+
+### Named Parameters (PHP 8.0+)
+
+Cleaner syntax:
+
+```php
+$this->messages->sendMessage(
+    peer: $chatId,
+    message: 'Hello',
+    parse_mode: 'Markdown'
+);
+```
+
+## Common Patterns
+
+### Sending Messages
+
+```php
+// Simple text message
+$this->messages->sendMessage([
+    'peer' => $peer,
+    'message' => 'Hello!',
+]);
+
+// With formatting
+$this->messages->sendMessage([
+    'peer' => $peer,
+    'message' => '**Bold** and _italic_',
+    'parse_mode' => 'Markdown',
+]);
+
+// With reply keyboard
+$this->messages->sendMessage([
+    'peer' => $peer,
+    'message' => 'Choose:',
+    'reply_markup' => [
+        'inline_keyboard' => [[
+            ['text' => 'Button', 'callback_data' => 'data'],
+        ]],
+    ],
+]);
+```
+
+### Getting Information
+
+```php
+// Get user info
+$user = $this->users->getFullUser(['id' => $userId]);
+
+// Get channel info
+$channel = $this->channels->getFullChannel(['channel' => $channelId]);
+
+// Get chat info
+$chat = $this->messages->getFullChat(['chat_id' => $chatId]);
+```
+
+### Managing Channels
+
+```php
+// Create channel
+$channel = $this->channels->createChannel([
+    'title' => 'My Channel',
+    'about' => 'Channel description',
+]);
+
+// Join channel
+$this->channels->joinChannel(['channel' => '@username']);
+
+// Leave channel
+$this->channels->leaveChannel(['channel' => $channelId]);
+
+// Edit channel
+$this->channels->editTitle([
+    'channel' => $channelId,
+    'title' => 'New Title',
+]);
+```
+
+### Managing Contacts
+
+```php
+// Add contact
+$this->contacts->addContact([
+    'id' => $userId,
+    'first_name' => 'John',
+    'last_name' => 'Doe',
+    'phone' => '+1234567890',
+]);
+
+// Delete contact
+$this->contacts->deleteContacts(['id' => [$userId]]);
+
+// Block user
+$this->contacts->block(['id' => $userId]);
+
+// Unblock user
+$this->contacts->unblock(['id' => $userId]);
+```
+
+## Error Handling
+
+```php
+use danog\MadelineProto\RPCErrorException;
+
+try {
+    $this->messages->sendMessage([
+        'peer' => $peer,
+        'message' => 'Hello',
+    ]);
+} catch (RPCErrorException $e) {
+    // Handle specific errors
+    match ($e->rpc) {
+        'PEER_ID_INVALID' => $this->logger('Invalid peer ID'),
+        'MESSAGE_TOO_LONG' => $this->logger('Message is too long'),
+        'FLOOD_WAIT_X' => $this->logger('Flood wait: ' . $e->rpc),
+        default => throw $e,
+    };
+}
+```
+
+## Pagination
+
+Many methods support pagination:
+
+```php
+// Get messages with pagination
+$messages = $this->messages->getHistory([
+    'peer' => $peer,
+    'offset_id' => 0,
+    'offset_date' => 0,
+    'add_offset' => 0,
+    'limit' => 100,
+    'max_id' => 0,
+    'min_id' => 0,
+]);
+
+// Get channel participants with pagination
+$participants = $this->channels->getParticipants([
+    'channel' => $channelId,
+    'filter' => ['_' => 'channelParticipantsRecent'],
+    'offset' => 0,
+    'limit' => 200,
+]);
+```
+
+## File Operations
+
+See [Files Settings](/api/settings/files) for configuration.
+
+```php
+// Upload file
+$media = $this->messages->uploadMedia([
+    'media' => [
+        '_' => 'inputMediaUploadedDocument',
+        'file' => '/path/to/file.pdf',
+    ],
+]);
+
+// Send media
+$this->messages->sendMedia([
+    'peer' => $peer,
+    'media' => $media,
+]);
+```
+
+## Async Operations
+
+All methods are async by default in MadelineProto:
+
+```php
+use function Amp\async;
+use function Amp\Future\await;
+
+// Run multiple operations in parallel
+$futures = [
+    async($this->messages->sendMessage(...), [
+        'peer' => $peer1,
+        'message' => 'Message 1',
+    ]),
+    async($this->messages->sendMessage(...), [
+        'peer' => $peer2,
+        'message' => 'Message 2',
+    ]),
+];
+
+// Wait for all to complete
+$results = await($futures);
+```
+
+## Best Practices
+
+1. **Use type hints** for better IDE support
+2. **Handle RPC errors** appropriately
+3. **Respect rate limits** (flood wait)
+4. **Use async** for concurrent operations
+5. **Cache peer information** when possible
+6. **Validate input** before API calls
+7. **Use appropriate namespaces** for clarity
+
+## See Also
+
+- [Message Methods](/api/methods/messages) - Detailed message operations
+- [Channel Methods](/api/methods/channels) - Channel management
+- [User Methods](/api/methods/users) - User operations
+- [EventHandler](/api/event-handler) - Event-driven bot development

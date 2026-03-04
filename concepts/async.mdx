@@ -1,0 +1,417 @@
+---
+title: Async Operations
+description: Understanding asynchronous programming and event-driven architecture in MadelineProto
+---
+
+## Overview
+
+MadelineProto is built on **AMPHP**, a modern asynchronous PHP framework that enables non-blocking I/O operations. This allows your bot to handle thousands of concurrent operations efficiently.
+
+<Info>
+MadelineProto v8 uses AMPHP v3 and Revolt event loop for all asynchronous operations.
+</Info>
+
+## Why Async?
+
+Traditional synchronous code blocks on I/O operations:
+
+```php
+// Synchronous (blocking)
+$result1 = $api->messages->sendMessage(...); // Wait
+$result2 = $api->messages->sendMessage(...); // Wait
+$result3 = $api->messages->sendMessage(...); // Wait
+// Total time: 3x request time
+```
+
+Asynchronous code runs operations concurrently:
+
+```php
+// Asynchronous (non-blocking)
+use function Amp\Future\await;
+use function Amp\async;
+
+$futures = [
+    async($api->messages->sendMessage(...)),
+    async($api->messages->sendMessage(...)),
+    async($api->messages->sendMessage(...)),
+];
+$results = await($futures);
+// Total time: ~1x request time
+```
+
+## Event Loop
+
+MadelineProto runs on the **Revolt event loop**, which:
+- Manages all asynchronous operations
+- Handles timers, deferrals, and callbacks
+- Processes network I/O efficiently
+
+### Starting the Event Loop
+
+Event handlers automatically start the event loop:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+
+class MyEventHandler extends SimpleEventHandler
+{
+    // Handler methods
+}
+
+// Starts event loop automatically
+MyEventHandler::startAndLoop('session.madeline');
+```
+
+From `EventHandler.php:138`, the `startAndLoop` method:
+- Initializes the API client
+- Caches plugins
+- Sets up error reporting
+- Starts the event loop
+
+## Async Primitives
+
+### Futures
+
+A `Future` represents a value that will be available in the future:
+
+```php
+use Amp\Future;
+use function Amp\async;
+
+// Create a future
+$future = async(function() {
+    // Simulated async operation
+    return $this->messages->getHistory(...);
+});
+
+// Wait for result
+$result = $future->await();
+```
+
+### Multiple Futures
+
+```php
+use function Amp\Future\await;
+use function Amp\async;
+
+// Run multiple operations concurrently
+$futures = [
+    async($this->messages->sendMessage(...)),
+    async($this->messages->sendMessage(...)),
+    async($this->messages->sendMessage(...)),
+];
+
+// Wait for all to complete
+$results = await($futures);
+```
+
+### First Completed Future
+
+```php
+use function Amp\Future\awaitFirst;
+
+// Wait for first to complete
+$result = awaitFirst($futures);
+```
+
+### Deferred Futures
+
+Create futures that you resolve manually:
+
+```php
+use Amp\DeferredFuture;
+
+$deferred = new DeferredFuture;
+$future = $deferred->getFuture();
+
+// Later, resolve it
+$deferred->complete($value);
+
+// Or reject it
+$deferred->error(new Exception('Failed'));
+```
+
+## Error Handling
+
+### Try-Catch
+
+Handle exceptions in async operations:
+
+```php
+try {
+    $result = $this->messages->sendMessage(...);
+} catch (\danog\MadelineProto\RPCErrorException $e) {
+    $this->logger("RPC error: " . $e->getMessage());
+}
+```
+
+### Future Error Handling
+
+```php
+use Amp\Future;
+
+$future = async(function() {
+    return $this->messages->sendMessage(...);
+});
+
+try {
+    $result = $future->await();
+} catch (Throwable $e) {
+    $this->logger("Error: " . $e->getMessage());
+}
+```
+
+## Timeouts and Cancellation
+
+### Timeout
+
+```php
+use Amp\TimeoutCancellation;
+use Amp\TimeoutException;
+
+$cancellation = new TimeoutCancellation(5.0); // 5 seconds
+
+try {
+    $result = $future->await($cancellation);
+} catch (TimeoutException $e) {
+    $this->logger("Operation timed out");
+}
+```
+
+### Manual Cancellation
+
+```php
+use Amp\DeferredCancellation;
+use Amp\CancelledException;
+
+$deferredCancellation = new DeferredCancellation;
+$cancellation = $deferredCancellation->getCancellation();
+
+// Start async operation
+$future = async(function() use ($cancellation) {
+    // Operation that respects cancellation
+});
+
+// Cancel it
+$deferredCancellation->cancel();
+
+try {
+    $result = $future->await();
+} catch (CancelledException $e) {
+    $this->logger("Operation cancelled");
+}
+```
+
+## Event Loop Integration
+
+### Queueing Callbacks
+
+```php
+use Revolt\EventLoop;
+
+// Queue a callback to run on next tick
+EventLoop::queue(function() {
+    $this->logger("Queued callback executed");
+});
+```
+
+### Delayed Execution
+
+```php
+use Revolt\EventLoop;
+
+// Execute after delay (in seconds)
+$callbackId = EventLoop::delay(5.0, function() {
+    $this->logger("Delayed callback executed");
+});
+
+// Cancel if needed
+EventLoop::cancel($callbackId);
+```
+
+### Repeating Callbacks
+
+```php
+use Revolt\EventLoop;
+
+// Execute every N seconds
+$callbackId = EventLoop::repeat(10.0, function() {
+    $this->logger("Periodic callback executed");
+});
+
+// Cancel when done
+EventLoop::cancel($callbackId);
+```
+
+<Note>
+For periodic tasks in event handlers, use the `#[Cron]` attribute instead of manual `EventLoop::repeat()`.
+</Note>
+
+## Practical Examples
+
+### Parallel Message Sending
+
+```php
+use function Amp\async;
+use function Amp\Future\await;
+
+class MyEventHandler extends SimpleEventHandler
+{
+    public function sendToMultipleUsers(array $userIds, string $message): void
+    {
+        $futures = [];
+        
+        foreach ($userIds as $userId) {
+            $futures[] = async(
+                $this->messages->sendMessage(...),
+                peer: $userId,
+                message: $message
+            );
+        }
+        
+        // Wait for all messages to send
+        $results = await($futures);
+        
+        $this->logger("Sent " . count($results) . " messages");
+    }
+}
+```
+
+### Rate-Limited Requests
+
+```php
+use Revolt\EventLoop;
+use function Amp\async;
+
+public function sendWithRateLimit(array $messages): void
+{
+    foreach ($messages as $index => $message) {
+        EventLoop::delay($index * 0.1, function() use ($message) {
+            $this->messages->sendMessage(
+                peer: $message['peer'],
+                message: $message['text']
+            );
+        });
+    }
+}
+```
+
+### Async File Operations
+
+```php
+use function Amp\File\read;
+use function Amp\File\write;
+
+public function processFile(string $path): void
+{
+    // Non-blocking file read
+    $content = read($path);
+    
+    // Process content
+    $processed = strtoupper($content);
+    
+    // Non-blocking file write
+    write($path . '.processed', $processed);
+}
+```
+
+## Event Handler Context
+
+### Inside Event Handlers
+
+All event handler methods run within the event loop context:
+
+```php
+class MyEventHandler extends SimpleEventHandler
+{
+    #[FilterCommand('test')]
+    public function testCommand(Message $message): void
+    {
+        // Already in event loop context
+        // All API calls are automatically async
+        $result = $this->messages->sendMessage(
+            peer: $message->chatId,
+            message: 'Response'
+        );
+    }
+}
+```
+
+### Concurrent Update Handling
+
+MadelineProto processes updates concurrently:
+
+```php
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Each message is handled in its own fiber
+    // Multiple messages are processed simultaneously
+    
+    // This won't block other message handlers
+    $this->sleep(5);
+    $message->reply('Done!');
+}
+```
+
+## Performance Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use async operations for I/O">
+    Always use async file operations, database queries, and HTTP requests to avoid blocking the event loop.
+  </Accordion>
+  
+  <Accordion title="Batch operations when possible">
+    Use `await()` to run multiple independent operations concurrently instead of sequentially.
+  </Accordion>
+  
+  <Accordion title="Avoid CPU-intensive tasks">
+    Offload heavy computations to separate processes or use `async()` to prevent blocking.
+  </Accordion>
+  
+  <Accordion title="Don't use sleep()">
+    Use `EventLoop::delay()` or `Tools::sleep()` instead of PHP's native `sleep()` which blocks the event loop.
+  </Accordion>
+</AccordionGroup>
+
+## Common Patterns
+
+### Promise-like Chains
+
+```php
+use function Amp\async;
+
+$result = async(function() {
+    $user = $this->getInfo($userId);
+    return $this->messages->sendMessage(
+        peer: $user,
+        message: 'Hello'
+    );
+})->await();
+```
+
+### Error Recovery
+
+```php
+use function Amp\async;
+
+$future = async($this->messages->sendMessage(...));
+
+try {
+    $result = $future->await();
+} catch (Throwable $e) {
+    // Retry logic
+    $result = async($this->messages->sendMessage(...))->await();
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Event Handlers" icon="bolt" href="/concepts/event-handlers">
+    Learn about event-driven update handling
+  </Card>
+  <Card title="Filters" icon="filter" href="/concepts/filters">
+    Filter updates with attributes and type hints
+  </Card>
+</CardGroup>

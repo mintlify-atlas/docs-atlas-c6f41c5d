@@ -1,0 +1,415 @@
+---
+title: Proxy Configuration
+description: Configure SOCKS5, HTTP, and MTProto proxies for MadelineProto connections
+---
+
+MadelineProto supports multiple proxy types to route connections through intermediary servers. This is useful for bypassing regional restrictions, improving privacy, or accessing Telegram from restricted networks.
+
+## Supported Proxy Types
+
+MadelineProto supports three proxy types:
+
+<CardGroup cols={3}>
+  <Card title="SOCKS5" icon="network-wired">
+    Standard SOCKS5 proxy protocol
+  </Card>
+  <Card title="HTTP" icon="globe">
+    HTTP/HTTPS proxy support
+  </Card>
+  <Card title="MTProto" icon="shield">
+    Telegram's MTProto proxy protocol
+  </Card>
+</CardGroup>
+
+## SOCKS5 Proxy
+
+SOCKS5 is the most common proxy type and offers the best compatibility.
+
+### Basic Configuration
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Stream\Proxy\SocksProxy;
+
+$settings = new Settings;
+
+$settings->getConnection()->addProxy(
+    SocksProxy::class,
+    [
+        'address' => '127.0.0.1',
+        'port' => 1080,
+    ]
+);
+```
+
+### With Authentication
+
+```php
+$settings->getConnection()->addProxy(
+    SocksProxy::class,
+    [
+        'address' => 'proxy.example.com',
+        'port' => 1080,
+        'username' => 'your_username',
+        'password' => 'your_password',
+    ]
+);
+```
+
+## HTTP Proxy
+
+HTTP proxies are commonly used in corporate environments.
+
+```php
+use danog\MadelineProto\Stream\Proxy\HttpProxy;
+
+$settings->getConnection()->addProxy(
+    HttpProxy::class,
+    [
+        'address' => 'proxy.company.com',
+        'port' => 8080,
+    ]
+);
+```
+
+### With Authentication
+
+```php
+$settings->getConnection()->addProxy(
+    HttpProxy::class,
+    [
+        'address' => 'proxy.company.com',
+        'port' => 8080,
+        'username' => 'employee',
+        'password' => 'password',
+    ]
+);
+```
+
+## MTProto Proxy
+
+MTProto proxies are specifically designed for Telegram and use obfuscation:
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\ObfuscatedStream;
+
+$settings->getConnection()->addProxy(
+    ObfuscatedStream::class,
+    [
+        'address' => 'mtproto.proxy.com',
+        'port' => 443,
+        'secret' => 'your_proxy_secret',
+    ]
+);
+```
+
+<Info>
+  MTProto proxies require a secret key provided by the proxy operator.
+</Info>
+
+## Multiple Proxies
+
+You can configure multiple proxies. MadelineProto will use them in round-robin fashion:
+
+```php
+$connection = $settings->getConnection();
+
+// Add first proxy
+$connection->addProxy(
+    SocksProxy::class,
+    [
+        'address' => 'proxy1.example.com',
+        'port' => 1080,
+    ]
+);
+
+// Add second proxy
+$connection->addProxy(
+    SocksProxy::class,
+    [
+        'address' => 'proxy2.example.com',
+        'port' => 1080,
+    ]
+);
+```
+
+## Setting All Proxies at Once
+
+Replace all configured proxies:
+
+```php
+$settings->getConnection()->setProxies([
+    SocksProxy::class => [
+        [
+            'address' => 'proxy1.example.com',
+            'port' => 1080,
+        ],
+        [
+            'address' => 'proxy2.example.com',
+            'port' => 1080,
+            'username' => 'user',
+            'password' => 'pass',
+        ],
+    ],
+    HttpProxy::class => [
+        [
+            'address' => 'http-proxy.example.com',
+            'port' => 8080,
+        ],
+    ],
+]);
+```
+
+## Removing Proxies
+
+### Remove Specific Proxy
+
+```php
+$settings->getConnection()->removeProxy(
+    SocksProxy::class,
+    [
+        'address' => 'proxy1.example.com',
+        'port' => 1080,
+    ]
+);
+```
+
+### Clear All Proxies
+
+```php
+$settings->getConnection()->clearProxies();
+```
+
+## Obfuscation
+
+Enable obfuscation to bypass ISP-level blocks:
+
+```php
+$settings->getConnection()->setObfuscated(true);
+```
+
+<Note>
+  Obfuscation wraps traffic in a layer that makes it harder for ISPs to detect and block Telegram connections.
+</Note>
+
+## Protocol and Transport
+
+For maximum compatibility with proxies, use appropriate protocols:
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\IntermediatePaddedStream;
+use danog\MadelineProto\Stream\Transport\DefaultStream;
+
+// Use intermediate padded for better obfuscation
+$settings->getConnection()->setProtocol(IntermediatePaddedStream::class);
+
+// Default TCP transport
+$settings->getConnection()->setTransport(DefaultStream::class);
+```
+
+## Complete Proxy Configuration
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Stream\Proxy\SocksProxy;
+use danog\MadelineProto\Stream\MTProtoTransport\IntermediatePaddedStream;
+
+$settings = new Settings;
+
+$connection = $settings->getConnection();
+
+// Configure SOCKS5 proxy with authentication
+$connection->addProxy(
+    SocksProxy::class,
+    [
+        'address' => 'proxy.example.com',
+        'port' => 1080,
+        'username' => 'user',
+        'password' => 'pass',
+    ]
+);
+
+// Enable obfuscation
+$connection->setObfuscated(true);
+
+// Use padded protocol for better obfuscation
+$connection->setProtocol(IntermediatePaddedStream::class);
+
+// Start bot
+MyEventHandler::startAndLoop('bot.madeline', $settings);
+```
+
+## Environment-Based Configuration
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Stream\Proxy\SocksProxy;
+use danog\MadelineProto\Stream\Proxy\HttpProxy;
+
+$settings = new Settings;
+$connection = $settings->getConnection();
+
+if ($proxyType = getenv('PROXY_TYPE')) {
+    $proxyConfig = [
+        'address' => getenv('PROXY_HOST'),
+        'port' => (int)getenv('PROXY_PORT'),
+    ];
+    
+    if ($username = getenv('PROXY_USERNAME')) {
+        $proxyConfig['username'] = $username;
+        $proxyConfig['password'] = getenv('PROXY_PASSWORD');
+    }
+    
+    $proxyClass = match($proxyType) {
+        'socks5' => SocksProxy::class,
+        'http' => HttpProxy::class,
+        default => null,
+    };
+    
+    if ($proxyClass) {
+        $connection->addProxy($proxyClass, $proxyConfig);
+    }
+}
+
+if (getenv('ENABLE_OBFUSCATION') === 'true') {
+    $connection->setObfuscated(true);
+}
+```
+
+## Docker Compose with Proxy
+
+```yaml
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: madelineproto-bot
+    restart: unless-stopped
+    environment:
+      - PROXY_TYPE=socks5
+      - PROXY_HOST=socks-proxy
+      - PROXY_PORT=1080
+      - PROXY_USERNAME=user
+      - PROXY_PASSWORD=pass
+      - ENABLE_OBFUSCATION=true
+
+  socks-proxy:
+    image: serjs/go-socks5-proxy
+    container_name: socks5-proxy
+    restart: unless-stopped
+    environment:
+      - PROXY_USER=user
+      - PROXY_PASSWORD=pass
+    ports:
+      - "1080:1080"
+```
+
+## Testing Proxy Connection
+
+Verify proxy connectivity before starting your bot:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Stream\Proxy\SocksProxy;
+
+try {
+    $settings = new Settings;
+    $settings->getConnection()->addProxy(
+        SocksProxy::class,
+        [
+            'address' => 'proxy.example.com',
+            'port' => 1080,
+        ]
+    );
+    
+    MyEventHandler::startAndLoop('bot.madeline', $settings);
+} catch (\Exception $e) {
+    echo "Proxy connection failed: " . $e->getMessage();
+}
+```
+
+## Common Proxy Providers
+
+<CardGroup cols={2}>
+  <Card title="Public SOCKS5" icon="globe">
+    Various free public SOCKS5 proxies (use with caution)
+  </Card>
+  <Card title="MTProto Proxies" icon="telegram">
+    Public MTProto proxies from @MTProxybot
+  </Card>
+  <Card title="Commercial Services" icon="building">
+    Paid proxy services with better reliability
+  </Card>
+  <Card title="Self-Hosted" icon="server">
+    Run your own proxy server for maximum control
+  </Card>
+</CardGroup>
+
+## Proxy Selection Strategy
+
+When multiple proxies are configured:
+
+1. **Round-robin**: Proxies are used in rotation
+2. **Failover**: If one proxy fails, next is tried automatically
+3. **Per-DC**: Different proxies can be used for different data centers
+
+## Performance Considerations
+
+<Warning>
+  Proxies add latency to all API calls. Choose geographically close proxies for best performance.
+</Warning>
+
+### Tips for Optimal Performance
+
+- Use proxies in the same region as Telegram data centers
+- Prefer SOCKS5 over HTTP for better performance
+- Monitor connection latency with metrics
+- Use dedicated proxy servers, not shared public proxies
+- Enable obfuscation only when necessary
+
+## Troubleshooting
+
+### Connection Timeout
+
+1. Verify proxy server is accessible
+2. Check firewall rules
+3. Validate proxy credentials
+4. Increase connection timeout
+
+```php
+$settings->getConnection()->setTimeout(10.0); // 10 seconds
+```
+
+### Authentication Failed
+
+1. Verify username and password
+2. Check if proxy requires authentication
+3. Test credentials with another client
+
+### Slow Performance
+
+1. Test proxy latency
+2. Use geographic closer proxy
+3. Check proxy bandwidth limits
+4. Consider using multiple proxies
+
+## Security Considerations
+
+<Warning>
+  **Important:** All traffic goes through the proxy server. Only use trusted proxy providers.
+</Warning>
+
+### Best Practices
+
+- Use authenticated proxies to prevent unauthorized access
+- Prefer encrypted connections (HTTPS, MTProto)
+- Regularly rotate proxy credentials
+- Monitor proxy logs for suspicious activity
+- Use dedicated proxies for sensitive operations
+
+## See Also
+
+- [Connection Settings](/advanced/settings)
+- [Docker Deployment](/advanced/docker)
+- [Database Configuration](/advanced/database)

@@ -1,0 +1,368 @@
+---
+title: Update Events
+description: Handle various Telegram update types
+---
+
+# Update Events
+
+MadelineProto provides handlers for numerous Telegram update types beyond just messages. This page covers the various update events you can handle.
+
+## Update Base Class
+
+All update types extend the `Update` abstract class.
+
+```php
+namespace danog\MadelineProto\EventHandler;
+
+abstract class Update extends IpcCapable implements JsonSerializable
+{
+    // Base class for all updates
+}
+```
+
+<Tip>
+Use `serialize()`, not `json_encode()` to serialize updates. `json_encode()` should only be used for logging.
+</Tip>
+
+## Common Update Handlers
+
+### onAny
+
+Handle any update type.
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\Update;
+
+class MyBot extends EventHandler
+{
+    public function onAny(Update $update): void
+    {
+        $this->logger("Received update: " . get_class($update));
+    }
+}
+```
+
+## Message Updates
+
+See [Message Events](/api/events/messages) for detailed information on message handling.
+
+- `onUpdateNewMessage` - New messages in private chats and groups
+- `onUpdateNewChannelMessage` - New messages in channels
+- `onUpdateEditMessage` - Edited messages
+- `onUpdateEditChannelMessage` - Edited channel messages
+
+## User Status Updates
+
+### User Status
+
+Handle user online/offline status changes.
+
+```php
+public function onUpdateUserStatus(array $update): void
+{
+    $userId = $update['user_id'];
+    $status = $update['status']['_'];
+    
+    $this->logger("User $userId status: $status");
+}
+```
+
+### Typing Status
+
+Handle typing indicators.
+
+```php
+public function onUpdateUserTyping(array $update): void
+{
+    $userId = $update['user_id'];
+    $action = $update['action']['_'];
+    
+    $this->logger("User $userId is $action");
+}
+```
+
+## Chat Updates
+
+### Chat Participant Updates
+
+```php
+public function onUpdateChatParticipant(array $update): void
+{
+    $chatId = $update['chat_id'];
+    $userId = $update['user_id'];
+    
+    $this->logger("Chat $chatId participant change: User $userId");
+}
+```
+
+### Channel Participant Updates
+
+```php
+public function onUpdateChannelParticipant(array $update): void
+{
+    $channelId = $update['channel_id'];
+    $userId = $update['user_id'];
+    
+    $this->logger("Channel $channelId participant change: User $userId");
+}
+```
+
+## Broadcast Progress
+
+Track progress of broadcast operations.
+
+```php
+use danog\MadelineProto\Broadcast\Progress;
+
+public function onUpdateBroadcastProgress(Progress $progress): void
+{
+    $this->logger(
+        "Broadcast progress: {$progress->current}/{$progress->total}"
+    );
+}
+```
+
+## Phone Call Updates
+
+```php
+public function onUpdatePhoneCall(array $update): void
+{
+    $call = $update['phone_call'];
+    $this->logger("Phone call update: " . $call['_']);
+}
+```
+
+## Bot-Specific Updates
+
+### Bot Inline Callback Query
+
+See [Callback Query Events](/api/events/callback-query) for detailed information.
+
+```php
+use danog\MadelineProto\EventHandler\CallbackQuery;
+
+public function onUpdateBotInlineQuery(CallbackQuery $query): void
+{
+    // Handle callback queries from inline keyboards
+}
+```
+
+### Bot Inline Query
+
+See [Inline Query Events](/api/events/inline-query) for detailed information.
+
+```php
+use danog\MadelineProto\EventHandler\InlineQuery;
+
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    // Handle inline queries
+}
+```
+
+## Read History Updates
+
+### Inbox Read
+
+```php
+public function onUpdateReadHistoryInbox(array $update): void
+{
+    $maxId = $update['max_id'];
+    $this->logger("Read inbox up to message $maxId");
+}
+```
+
+### Outbox Read
+
+```php
+public function onUpdateReadHistoryOutbox(array $update): void
+{
+    $maxId = $update['max_id'];
+    $this->logger("Read outbox up to message $maxId");
+}
+```
+
+## Pinned Message Updates
+
+```php
+public function onUpdatePinnedMessages(array $update): void
+{
+    $messages = $update['messages'];
+    $this->logger("Pinned messages updated: " . count($messages));
+}
+```
+
+## Draft Updates
+
+```php
+public function onUpdateDraftMessage(array $update): void
+{
+    $draft = $update['draft'];
+    $this->logger("Draft message updated");
+}
+```
+
+## Notification Settings
+
+```php
+public function onUpdateNotifySettings(array $update): void
+{
+    $settings = $update['notify_settings'];
+    $this->logger("Notification settings updated");
+}
+```
+
+## Service Notifications
+
+```php
+public function onUpdateServiceNotification(array $update): void
+{
+    $type = $update['type'];
+    $message = $update['message'];
+    
+    $this->logger("Service notification ($type): $message");
+}
+```
+
+## Web Page Updates
+
+```php
+public function onUpdateWebPage(array $update): void
+{
+    $webpage = $update['webpage'];
+    $this->logger("Web page updated: " . ($webpage['url'] ?? 'N/A'));
+}
+```
+
+## Channel/Supergroup Updates
+
+### Channel Message Views
+
+```php
+public function onUpdateChannelMessageViews(array $update): void
+{
+    $channelId = $update['channel_id'];
+    $id = $update['id'];
+    $views = $update['views'];
+    
+    $this->logger("Message $id in channel $channelId has $views views");
+}
+```
+
+### Channel Message Forwards
+
+```php
+public function onUpdateChannelMessageForwards(array $update): void
+{
+    $channelId = $update['channel_id'];
+    $id = $update['id'];
+    $forwards = $update['forwards'];
+    
+    $this->logger("Message $id forwarded $forwards times");
+}
+```
+
+## Config Updates
+
+```php
+public function onUpdateConfig(array $update): void
+{
+    $this->logger("Telegram config updated");
+}
+```
+
+## Using Filters with Updates
+
+When using SimpleEventHandler, you can filter updates by type:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\InlineQuery;
+use danog\MadelineProto\EventHandler\CallbackQuery;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+
+class FilteredBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleMessage(Message $message): void
+    {
+        // Automatically filtered to only Message updates
+    }
+    
+    #[Handler]
+    public function handleInline(InlineQuery $query): void
+    {
+        // Automatically filtered to only InlineQuery updates
+    }
+    
+    #[Handler]
+    public function handleCallback(CallbackQuery $query): void
+    {
+        // Automatically filtered to only CallbackQuery updates
+    }
+}
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\{Message, Update};
+
+class ComprehensiveBot extends EventHandler
+{
+    public function onUpdateNewMessage(Message $message): void
+    {
+        $this->logger("New message: {$message->message}");
+    }
+    
+    public function onUpdateUserStatus(array $update): void
+    {
+        $userId = $update['user_id'];
+        $status = $update['status']['_'];
+        $this->logger("User $userId: $status");
+    }
+    
+    public function onUpdateUserTyping(array $update): void
+    {
+        $userId = $update['user_id'];
+        $this->logger("User $userId is typing...");
+    }
+    
+    public function onUpdateReadHistoryInbox(array $update): void
+    {
+        $this->logger("Messages read up to ID: {$update['max_id']}");
+    }
+    
+    public function onAny(Update $update): void
+    {
+        // Catch any unhandled update
+        $type = get_class($update);
+        $this->logger("Unhandled update: $type");
+    }
+}
+
+ComprehensiveBot::startAndLoop('session.madeline');
+```
+
+## Raw Updates
+
+For updates that don't have a specific handler, you can use the raw update array:
+
+```php
+public function onUpdateSomething(array $update): void
+{
+    $type = $update['_'];
+    $this->logger("Raw update: $type");
+    $this->logger(json_encode($update, JSON_PRETTY_PRINT));
+}
+```
+
+## See Also
+
+- [Message Events](/api/events/messages) - Detailed message handling
+- [Inline Query Events](/api/events/inline-query) - Inline query handling
+- [Callback Query Events](/api/events/callback-query) - Button callback handling
+- [SimpleEventHandler](/api/simple-event-handler) - Using filters with updates

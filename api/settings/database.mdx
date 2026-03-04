@@ -1,0 +1,392 @@
+---
+title: Database Settings
+description: Configure database backend for session storage
+---
+
+# Database Settings
+
+MadelineProto supports multiple database backends for storing session data, peers, and other information.
+
+## Overview
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\{Memory, Mysql, Postgres, Redis};
+
+$settings = new Settings;
+$settings->setDb(new Mysql);
+```
+
+## Available Backends
+
+### Memory (Default)
+
+Store data in memory. Data is lost when the script terminates.
+
+```php
+use danog\MadelineProto\Settings\Database\Memory;
+
+$settings->setDb(new Memory);
+```
+
+<ResponseField name="Pros">
+  - Fastest performance
+  - No external dependencies
+  - Simple setup
+</ResponseField>
+
+<ResponseField name="Cons">
+  - Data lost on restart
+  - High memory usage for large datasets
+  - Not suitable for production
+</ResponseField>
+
+### MySQL
+
+Store data in MySQL/MariaDB database.
+
+<ParamField path="Requirements">
+  MariaDB 10.2+ or MySQL 5.6+
+</ParamField>
+
+```php
+use danog\MadelineProto\Settings\Database\Mysql;
+
+$mysql = new Mysql;
+$mysql->setUri('tcp://localhost:3306');
+$mysql->setDatabase('madeline');
+$mysql->setUsername('user');
+$mysql->setPassword('password');
+$mysql->setMaxConnections(10);
+$mysql->setIdleTimeout(60);
+
+$settings->setDb($mysql);
+```
+
+#### MySQL Methods
+
+<ParamField path="uri" type="string" required>
+  Database server URI (tcp://host:port or unix:///path/to/socket)
+</ParamField>
+
+<ParamField path="database" type="string" required>
+  Database name
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  Database username
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  Database password
+</ParamField>
+
+<ParamField path="maxConnections" type="int" default="10">
+  Maximum number of connections
+</ParamField>
+
+<ParamField path="idleTimeout" type="int" default="60">
+  Idle connection timeout in seconds
+</ParamField>
+
+<ParamField path="cacheTtl" type="int" default="300">
+  Cache TTL in seconds
+</ParamField>
+
+```php
+$mysql->setUri('tcp://localhost:3306');
+$mysql->setDatabase('madeline');
+$mysql->setUsername('madeline_user');
+$mysql->setPassword('secure_password');
+$mysql->setMaxConnections(100);
+$mysql->setIdleTimeout(120);
+```
+
+### PostgreSQL
+
+Store data in PostgreSQL database.
+
+```php
+use danog\MadelineProto\Settings\Database\Postgres;
+
+$postgres = new Postgres;
+$postgres->setUri('tcp://localhost:5432');
+$postgres->setDatabase('madeline');
+$postgres->setUsername('user');
+$postgres->setPassword('password');
+$postgres->setMaxConnections(10);
+$postgres->setIdleTimeout(60);
+
+$settings->setDb($postgres);
+```
+
+#### PostgreSQL Methods
+
+Same as MySQL:
+
+<ParamField path="uri" type="string" required>
+  Database server URI
+</ParamField>
+
+<ParamField path="database" type="string" required>
+  Database name
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  Database username
+</ParamField>
+
+<ParamField path="password" type="string" required>
+  Database password
+</ParamField>
+
+<ParamField path="maxConnections" type="int" default="10">
+  Maximum connections
+</ParamField>
+
+<ParamField path="idleTimeout" type="int" default="60">
+  Idle timeout in seconds
+</ParamField>
+
+### Redis
+
+Store data in Redis.
+
+```php
+use danog\MadelineProto\Settings\Database\Redis;
+
+$redis = new Redis;
+$redis->setUri('tcp://localhost:6379');
+$redis->setPassword('password'); // Optional
+$redis->setDatabase(0);
+
+$settings->setDb($redis);
+```
+
+#### Redis Methods
+
+<ParamField path="uri" type="string" required>
+  Redis server URI (tcp://host:port or unix:///path/to/socket)
+</ParamField>
+
+<ParamField path="password" type="string">
+  Redis password (if authentication is enabled)
+</ParamField>
+
+<ParamField path="database" type="int" default="0">
+  Redis database number (0-15)
+</ParamField>
+
+```php
+$redis->setUri('tcp://localhost:6379');
+$redis->setPassword('redis_password');
+$redis->setDatabase(1);
+```
+
+## Serialization
+
+Choose how data is serialized in the database.
+
+### SerializerType
+
+Available serialization methods:
+
+```php
+use danog\MadelineProto\Settings\Database\SerializerType;
+
+// Use igbinary (faster, smaller, requires ext-igbinary)
+$mysql->setSerializer(SerializerType::IGBINARY);
+
+// Use native PHP serialization (default, slower, larger)
+$mysql->setSerializer(SerializerType::SERIALIZE);
+```
+
+<ResponseField name="IGBINARY">
+  - Faster serialization
+  - Smaller data size
+  - Requires igbinary extension
+  - Recommended for production
+</ResponseField>
+
+<ResponseField name="SERIALIZE">
+  - Native PHP serialization
+  - No external dependencies
+  - Slower and larger
+</ResponseField>
+
+## Common Settings
+
+### setMaxConnections
+
+Set maximum number of database connections.
+
+```php
+$mysql->setMaxConnections(100);
+```
+
+### setIdleTimeout
+
+Set timeout for idle connections.
+
+```php
+$mysql->setIdleTimeout(120); // 2 minutes
+```
+
+### setCacheTtl
+
+Set cache time-to-live.
+
+```php
+$mysql->setCacheTtl(600); // 10 minutes
+```
+
+## Complete Examples
+
+### MySQL Configuration
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\{Mysql, SerializerType};
+use danog\MadelineProto\API;
+
+$settings = new Settings;
+
+$mysql = new Mysql;
+$mysql->setUri('tcp://localhost:3306');
+$mysql->setDatabase('telegram_bot');
+$mysql->setUsername('bot_user');
+$mysql->setPassword(getenv('DB_PASSWORD'));
+$mysql->setMaxConnections(100);
+$mysql->setIdleTimeout(120);
+$mysql->setCacheTtl(300);
+$mysql->setSerializer(SerializerType::IGBINARY);
+
+$settings->setDb($mysql);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### Redis Configuration
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Redis;
+use danog\MadelineProto\API;
+
+$settings = new Settings;
+
+$redis = new Redis;
+$redis->setUri('tcp://localhost:6379');
+$redis->setPassword(getenv('REDIS_PASSWORD'));
+$redis->setDatabase(0);
+
+$settings->setDb($redis);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### PostgreSQL Configuration
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\{Postgres, SerializerType};
+use danog\MadelineProto\API;
+
+$settings = new Settings;
+
+$postgres = new Postgres;
+$postgres->setUri('tcp://localhost:5432');
+$postgres->setDatabase('madeline');
+$postgres->setUsername('postgres');
+$postgres->setPassword(getenv('POSTGRES_PASSWORD'));
+$postgres->setMaxConnections(50);
+$postgres->setSerializer(SerializerType::IGBINARY);
+
+$settings->setDb($postgres);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+## Database Setup
+
+### MySQL/MariaDB
+
+```sql
+CREATE DATABASE telegram_bot CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'bot_user'@'localhost' IDENTIFIED BY 'secure_password';
+GRANT ALL PRIVILEGES ON telegram_bot.* TO 'bot_user'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+### PostgreSQL
+
+```sql
+CREATE DATABASE madeline;
+CREATE USER madeline_user WITH PASSWORD 'secure_password';
+GRANT ALL PRIVILEGES ON DATABASE madeline TO madeline_user;
+```
+
+### Redis
+
+Edit `/etc/redis/redis.conf`:
+
+```conf
+requirepass your_secure_password
+maxmemory 2gb
+maxmemory-policy allkeys-lru
+```
+
+## Performance Considerations
+
+### Memory
+- **Best for**: Testing, development
+- **Not for**: Production, long-running bots
+
+### MySQL/MariaDB
+- **Best for**: General production use
+- **Pros**: Reliable, well-supported, good performance
+- **Cons**: Requires database server
+
+### PostgreSQL
+- **Best for**: Advanced features, large datasets
+- **Pros**: Advanced features, excellent for complex queries
+- **Cons**: Slightly more complex setup
+
+### Redis
+- **Best for**: High performance, caching
+- **Pros**: Extremely fast, simple
+- **Cons**: Data can be lost if not configured with persistence
+
+## Best Practices
+
+1. **Use igbinary** for better performance:
+   ```php
+   $db->setSerializer(SerializerType::IGBINARY);
+   ```
+
+2. **Set appropriate connection limits**:
+   ```php
+   $db->setMaxConnections(100);
+   ```
+
+3. **Use environment variables** for credentials:
+   ```php
+   $db->setPassword(getenv('DB_PASSWORD'));
+   ```
+
+4. **Enable Redis persistence** for production:
+   ```conf
+   # In redis.conf
+   save 900 1
+   save 300 10
+   save 60 10000
+   appendonly yes
+   ```
+
+5. **Regular backups** for MySQL/PostgreSQL
+
+## See Also
+
+- [AppInfo Settings](/api/settings/app-info) - Configure API credentials
+- [Logger Settings](/api/settings/logger) - Configure logging
+- [Connection Settings](/api/settings/connection) - Connection parameters

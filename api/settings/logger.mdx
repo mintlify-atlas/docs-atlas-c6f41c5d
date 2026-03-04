@@ -1,0 +1,432 @@
+---
+title: Logger Settings
+description: Configure logging for MadelineProto
+---
+
+# Logger Settings
+
+The `Logger` class configures how MadelineProto logs messages, errors, and debug information.
+
+## Overview
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra('/var/log/madeline.log')
+    ->setLevel(Logger::LEVEL_VERBOSE);
+```
+
+## Logger Types
+
+### FILE_LOGGER
+
+Log to a file.
+
+```php
+use danog\MadelineProto\Logger;
+
+$settings->getLogger()
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra('/var/log/madeline.log');
+```
+
+### ECHO_LOGGER
+
+Log to stdout (default for CLI).
+
+```php
+$settings->getLogger()
+    ->setType(Logger::ECHO_LOGGER);
+```
+
+### CALLABLE_LOGGER
+
+Log using a custom callable.
+
+```php
+$settings->getLogger()
+    ->setType(Logger::CALLABLE_LOGGER)
+    ->setExtra(function (string $message, int $level) {
+        // Custom logging logic
+        error_log("[$level] $message");
+    });
+```
+
+### DEFAULT_LOGGER
+
+Use default logger (ECHO for CLI, FILE for web).
+
+```php
+$settings->getLogger()
+    ->setType(Logger::DEFAULT_LOGGER);
+```
+
+### NO_LOGGER
+
+Disable logging.
+
+```php
+$settings->getLogger()
+    ->setType(Logger::NO_LOGGER);
+```
+
+## Log Levels
+
+Control verbosity of logging.
+
+### LEVEL_ULTRA_VERBOSE
+
+Log everything including detailed debug info.
+
+```php
+$settings->getLogger()->setLevel(Logger::LEVEL_ULTRA_VERBOSE);
+```
+
+### LEVEL_VERBOSE
+
+Log detailed information (default).
+
+```php
+$settings->getLogger()->setLevel(Logger::LEVEL_VERBOSE);
+```
+
+### LEVEL_NOTICE
+
+Log notices and above.
+
+```php
+$settings->getLogger()->setLevel(Logger::LEVEL_NOTICE);
+```
+
+### LEVEL_WARNING
+
+Log warnings and errors only.
+
+```php
+$settings->getLogger()->setLevel(Logger::LEVEL_WARNING);
+```
+
+### LEVEL_ERROR
+
+Log errors only.
+
+```php
+$settings->getLogger()->setLevel(Logger::LEVEL_ERROR);
+```
+
+### LEVEL_FATAL_ERROR
+
+Log only fatal errors.
+
+```php
+$settings->getLogger()->setLevel(Logger::LEVEL_FATAL_ERROR);
+```
+
+## Methods
+
+### setType
+
+Set the logger type.
+
+<ParamField path="type" type="int" required>
+  Logger type constant
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+use danog\MadelineProto\Logger;
+
+$settings->getLogger()->setType(Logger::FILE_LOGGER);
+```
+
+### getType
+
+Get the logger type.
+
+<ResponseField name="return" type="int">
+  Logger type constant
+</ResponseField>
+
+```php
+$type = $settings->getLogger()->getType();
+```
+
+### setExtra
+
+Set extra parameter (file path for FILE_LOGGER, callable for CALLABLE_LOGGER).
+
+<ParamField path="extra" type="string|callable|null" required>
+  File path or callable function
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+// For FILE_LOGGER
+$settings->getLogger()
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra('/var/log/madeline.log');
+
+// For CALLABLE_LOGGER
+$settings->getLogger()
+    ->setType(Logger::CALLABLE_LOGGER)
+    ->setExtra(function (string $message, int $level) {
+        // Custom handler
+    });
+```
+
+### getExtra
+
+Get the extra parameter.
+
+<ResponseField name="return" type="string|callable|null">
+  File path or callable
+</ResponseField>
+
+```php
+$extra = $settings->getLogger()->getExtra();
+```
+
+### setLevel
+
+Set logging level.
+
+<ParamField path="level" type="int" required>
+  Log level constant
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+use danog\MadelineProto\Logger;
+
+$settings->getLogger()->setLevel(Logger::LEVEL_NOTICE);
+```
+
+### getLevel
+
+Get the logging level.
+
+<ResponseField name="return" type="int">
+  Log level constant
+</ResponseField>
+
+```php
+$level = $settings->getLogger()->getLevel();
+```
+
+### setMaxSize
+
+Set maximum file size for file logger.
+
+<ParamField path="maxSize" type="int" required>
+  Maximum size in bytes (-1 for unlimited, minimum 25MB)
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+// 100MB max file size
+$settings->getLogger()->setMaxSize(100 * 1024 * 1024);
+
+// Unlimited size
+$settings->getLogger()->setMaxSize(-1);
+```
+
+### getMaxSize
+
+Get maximum file size.
+
+<ResponseField name="return" type="int">
+  Maximum size in bytes
+</ResponseField>
+
+```php
+$maxSize = $settings->getLogger()->getMaxSize();
+```
+
+## Complete Examples
+
+### File Logging
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\API;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra('/var/log/telegram-bot.log')
+    ->setLevel(Logger::LEVEL_VERBOSE)
+    ->setMaxSize(100 * 1024 * 1024); // 100MB
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### Custom Logger
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::CALLABLE_LOGGER)
+    ->setExtra(function (string $message, int $level) {
+        $levelName = match($level) {
+            Logger::LEVEL_FATAL_ERROR => 'FATAL',
+            Logger::LEVEL_ERROR => 'ERROR',
+            Logger::LEVEL_WARNING => 'WARN',
+            Logger::LEVEL_NOTICE => 'NOTICE',
+            Logger::LEVEL_VERBOSE => 'VERBOSE',
+            Logger::LEVEL_ULTRA_VERBOSE => 'DEBUG',
+            default => 'INFO',
+        };
+        
+        $timestamp = date('Y-m-d H:i:s');
+        error_log("[$timestamp] [$levelName] $message");
+        
+        // Also send errors to external service
+        if ($level <= Logger::LEVEL_ERROR) {
+            // Send to error tracking service
+        }
+    })
+    ->setLevel(Logger::LEVEL_NOTICE);
+```
+
+### Production Logging
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+
+$settings = new Settings;
+
+// Only log warnings and errors
+$settings->getLogger()
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra('/var/log/madeline-errors.log')
+    ->setLevel(Logger::LEVEL_WARNING)
+    ->setMaxSize(50 * 1024 * 1024); // 50MB
+```
+
+### Development Logging
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+
+$settings = new Settings;
+
+// Log everything to console
+$settings->getLogger()
+    ->setType(Logger::ECHO_LOGGER)
+    ->setLevel(Logger::LEVEL_ULTRA_VERBOSE);
+```
+
+### Rotating File Logger
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+
+$logFile = '/var/log/madeline-' . date('Y-m-d') . '.log';
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra($logFile)
+    ->setLevel(Logger::LEVEL_VERBOSE)
+    ->setMaxSize(10 * 1024 * 1024); // 10MB per file
+```
+
+## Logging from EventHandler
+
+Use the logger within your event handler:
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\Logger;
+
+class MyBot extends EventHandler
+{
+    public function onStart(): void
+    {
+        // Log at different levels
+        $this->logger("Bot started", Logger::LEVEL_NOTICE);
+        $this->logger("Debug info", Logger::LEVEL_VERBOSE);
+        $this->logger("Warning message", Logger::LEVEL_WARNING);
+        $this->logger("Error occurred", Logger::LEVEL_ERROR);
+    }
+}
+```
+
+## Environment-Based Configuration
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+
+$settings = new Settings;
+
+$isDevelopment = getenv('APP_ENV') === 'development';
+
+if ($isDevelopment) {
+    $settings->getLogger()
+        ->setType(Logger::ECHO_LOGGER)
+        ->setLevel(Logger::LEVEL_ULTRA_VERBOSE);
+} else {
+    $settings->getLogger()
+        ->setType(Logger::FILE_LOGGER)
+        ->setExtra('/var/log/madeline.log')
+        ->setLevel(Logger::LEVEL_WARNING)
+        ->setMaxSize(100 * 1024 * 1024);
+}
+```
+
+## Log Rotation
+
+For production, use system log rotation:
+
+```bash
+# /etc/logrotate.d/madeline
+/var/log/madeline*.log {
+    daily
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 www-data www-data
+    sharedscripts
+}
+```
+
+## Best Practices
+
+1. **Use appropriate log levels** for different environments
+2. **Limit file size** to prevent disk space issues
+3. **Implement log rotation** for long-running bots
+4. **Use CALLABLE_LOGGER** for advanced logging (e.g., to external services)
+5. **Never log sensitive data** (passwords, tokens, etc.)
+6. **Set WARNING level** or higher in production
+7. **Use ULTRA_VERBOSE** only for debugging
+
+## See Also
+
+- [AppInfo Settings](/api/settings/app-info) - Configure API credentials
+- [Connection Settings](/api/settings/connection) - Connection parameters
+- [Database Settings](/api/settings/database) - Database configuration

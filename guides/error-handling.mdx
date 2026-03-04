@@ -1,0 +1,327 @@
+---
+title: Error Handling
+description: Learn how to handle exceptions and errors in MadelineProto applications
+---
+
+## Exception Hierarchy
+
+MadelineProto uses several exception types to indicate different error conditions:
+
+```php
+\Exception (base)
+├── danog\MadelineProto\Exception
+│   ├── danog\MadelineProto\SecurityException
+│   ├── danog\MadelineProto\NothingInTheSocketException
+│   ├── danog\MadelineProto\PeerNotInDbException
+│   ├── danog\MadelineProto\PTSException
+│   └── danog\MadelineProto\SecretPeerNotInDbException
+├── danog\MadelineProto\RPCErrorException
+│   ├── danog\MadelineProto\RPCError\FloodWaitError
+│   ├── danog\MadelineProto\RPCError\FloodPremiumWaitError
+│   └── [Many specific RPC errors...]
+└── danog\MadelineProto\TL\Exception (TL deserialization)
+```
+
+## Basic Exception Types
+
+### Exception (Base)
+
+The base exception class for general MadelineProto errors:
+
+```php
+use danog\MadelineProto\Exception;
+
+try {
+    $MadelineProto->someMethod();
+} catch (Exception $e) {
+    echo "MadelineProto error: " . $e->getMessage();
+    echo "\nFile: " . $e->getFile() . ":" . $e->getLine();
+    echo "\nTL Trace: " . $e->getTLTrace();
+}
+```
+
+**Key features:**
+- Includes TL (Type Language) trace for debugging
+- Logs fatal errors automatically
+- Provides context about where the error occurred
+
+Source: `/home/daytona/workspace/source/src/Exception.php:32-56`
+
+### SecurityException
+
+Indicates a security-related error:
+
+```php
+use danog\MadelineProto\SecurityException;
+
+try {
+    // Operations that involve cryptography or authentication
+    $MadelineProto->importAuthorization($auth);
+} catch (SecurityException $e) {
+    echo "Security error: " . $e->getMessage();
+    // Handle security violations
+}
+```
+
+Source: `/home/daytona/workspace/source/src/SecurityException.php:28`
+
+### PeerNotInDbException
+
+Thrown when a peer is not found in the local database:
+
+```php
+use danog\MadelineProto\PeerNotInDbException;
+
+try {
+    $info = $MadelineProto->getInfo($peerId);
+} catch (PeerNotInDbException $e) {
+    echo "Peer not found in database\n";
+    
+    // Try to fetch from Telegram
+    try {
+        $MadelineProto->messages->getChats(['id' => [$peerId]]);
+        $info = $MadelineProto->getInfo($peerId); // Retry
+    } catch (\Exception $e) {
+        echo "Peer does not exist: " . $e->getMessage();
+    }
+}
+```
+
+## RPC Error Exceptions
+
+### RPCErrorException
+
+Represents errors returned by Telegram's API:
+
+```php
+use danog\MadelineProto\RPCErrorException;
+
+try {
+    $MadelineProto->messages->sendMessage([
+        'peer' => $peer,
+        'message' => $text,
+    ]);
+} catch (RPCErrorException $e) {
+    echo "RPC Error: " . $e->getMessage();
+    echo "\nCode: " . $e->getCode();
+    echo "\nDescription: " . $e->getDescription();
+    echo "\nMethod: " . $e->rpc;
+}
+```
+
+**Available methods:**
+- `getMessage()` - Raw error string (e.g., `FLOOD_WAIT_42`)
+- `getCode()` - Error code
+- `getDescription()` - Human-readable description
+- `getLocalization()` - Localized error message
+
+Source: `/home/daytona/workspace/source/src/RPCErrorException.php:35-224`
+
+### Common RPC Errors
+
+#### Channel/Chat Errors
+
+```php
+use danog\MadelineProto\RPCError\ChannelPrivateError;
+use danog\MadelineProto\RPCError\ChannelInvalidError;
+use danog\MadelineProto\RPCError\ChatAdminRequiredError;
+
+try {
+    $MadelineProto->channels->getFullChannel(['channel' => $channelId]);
+} catch (ChannelPrivateError $e) {
+    echo "You haven't joined this channel";
+} catch (ChannelInvalidError $e) {
+    echo "Invalid channel ID";
+} catch (ChatAdminRequiredError $e) {
+    echo "Admin privileges required";
+}
+```
+
+#### User Errors
+
+```php
+use danog\MadelineProto\RPCError\InputUserDeactivatedError;
+
+try {
+    $MadelineProto->messages->sendMessage([
+        'peer' => $userId,
+        'message' => 'Hello',
+    ]);
+} catch (InputUserDeactivatedError $e) {
+    echo "User account is deactivated/deleted";
+}
+```
+
+#### File Errors
+
+```php
+use danog\MadelineProto\RPCError\FileReferenceExpiredError;
+
+try {
+    $MadelineProto->messages->sendMedia([
+        'peer' => $peer,
+        'media' => $media,
+    ]);
+} catch (FileReferenceExpiredError $e) {
+    echo "File reference expired, need to re-fetch media";
+    // Refresh the file reference and retry
+}
+```
+
+## Rate Limiting Errors
+
+See the dedicated [Flood Wait guide](/guides/flood-wait) for detailed information on handling rate limits.
+
+### Quick Example
+
+```php
+use danog\MadelineProto\RPCError\FloodWaitError;
+
+try {
+    $MadelineProto->messages->sendMessage([...]);
+} catch (FloodWaitError $e) {
+    $seconds = $e->getWaitTime();
+    echo "Rate limited. Wait $seconds seconds\n";
+    
+    // Option 1: Wait automatically
+    $e->wait();
+    
+    // Option 2: Handle manually
+    sleep($seconds);
+}
+```
+
+## TL Exceptions
+
+TL (Type Language) exceptions occur during serialization/deserialization:
+
+```php
+use danog\MadelineProto\TL\Exception as TLException;
+
+try {
+    $MadelineProto->methodCall($method, $params);
+} catch (TLException $e) {
+    echo "TL Error: " . $e->getMessage();
+    echo "\nTL Trace: " . $e->getTLTrace();
+}
+```
+
+Source: `/home/daytona/workspace/source/src/TL/Exception.php:31-47`
+
+## Best Practices
+
+### Catch Specific Exceptions
+
+```php
+use danog\MadelineProto\RPCError\FloodWaitError;
+use danog\MadelineProto\RPCError\UserPrivacyRestrictedError;
+use danog\MadelineProto\RPCErrorException;
+use danog\MadelineProto\Exception;
+
+try {
+    $result = $MadelineProto->messages->sendMessage([
+        'peer' => $peer,
+        'message' => $message,
+    ]);
+} catch (FloodWaitError $e) {
+    // Handle rate limiting
+    $e->wait();
+} catch (UserPrivacyRestrictedError $e) {
+    // User's privacy settings don't allow this
+    echo "Cannot send message due to privacy settings";
+} catch (RPCErrorException $e) {
+    // Handle other RPC errors
+    echo "Telegram error: " . $e->getDescription();
+} catch (Exception $e) {
+    // Handle MadelineProto errors
+    echo "Client error: " . $e->getMessage();
+}
+```
+
+### Use Try-Catch-Finally
+
+```php
+$cleanup = false;
+try {
+    $file = $MadelineProto->upload('file.jpg');
+    $cleanup = true;
+    
+    $MadelineProto->messages->sendMedia([
+        'peer' => $peer,
+        'media' => $file,
+    ]);
+} catch (\Exception $e) {
+    echo "Error: " . $e->getMessage();
+} finally {
+    if ($cleanup) {
+        // Clean up temporary files
+        unlink('file.jpg');
+    }
+}
+```
+
+### Logging Exceptions
+
+```php
+use danog\MadelineProto\Logger;
+
+try {
+    $MadelineProto->someMethod();
+} catch (\Exception $e) {
+    // MadelineProto automatically logs fatal errors
+    Logger::log($e->getMessage(), Logger::ERROR);
+    Logger::log($e->getTraceAsString(), Logger::ERROR);
+    
+    // Rethrow if needed
+    throw $e;
+}
+```
+
+## Error Reporting
+
+MadelineProto automatically reports unknown RPC errors to help improve error descriptions:
+
+```php
+// Errors are automatically reported to:
+// https://report-rpc-error.madelineproto.xyz/
+
+// You can set an auth token for reporting:
+putenv('TELERPC_AUTH_TOKEN=your_token_here');
+```
+
+Source: `/home/daytona/workspace/source/src/RPCErrorException.php:170-212`
+
+## Exception Helper Methods
+
+### getTLTrace()
+
+Get the TL (Type Language) trace for debugging:
+
+```php
+try {
+    $MadelineProto->methodCall($method, $params);
+} catch (\Exception $e) {
+    if (method_exists($e, 'getTLTrace')) {
+        echo "TL Trace:\n" . $e->getTLTrace();
+    }
+}
+```
+
+### PrettyException Trait
+
+MadelineProto exceptions include enhanced stack traces showing TL serialization paths:
+
+```php
+// Example TL trace output:
+// While serializing:  messages.sendMessage['message']
+// PeerHandler.php(432):  getInfo([...])
+// MTProto.php(156):       methodCall(...)
+```
+
+Source: `/home/daytona/workspace/source/src/TL/PrettyException.php:29-100`
+
+## See Also
+
+- [Flood Wait Handling](/guides/flood-wait) - Dealing with rate limits
+- [Logging](/guides/logging) - Configuring MadelineProto logging
+- [API Methods](/api/methods/overview) - Complete API documentation

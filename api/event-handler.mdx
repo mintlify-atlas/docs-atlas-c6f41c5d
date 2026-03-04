@@ -1,0 +1,304 @@
+---
+title: EventHandler
+description: Base event handler class for handling Telegram updates
+---
+
+# EventHandler
+
+The abstract EventHandler class is the foundation for building Telegram bots with MadelineProto. It provides a structured way to handle various types of updates from Telegram.
+
+## Overview
+
+EventHandler allows you to:
+- Handle incoming messages, updates, and queries
+- Use filters to process specific update types
+- Schedule periodic tasks with cron attributes
+- Load plugins for modular functionality
+- Access all Telegram API namespaces
+
+## Basic Usage
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\Message;
+
+class MyEventHandler extends EventHandler
+{
+    public function onStart(): void
+    {
+        // Called when the event handler starts
+        $this->logger("Bot started!");
+    }
+
+    public function onUpdateNewMessage(Message $message): void
+    {
+        // Handle new messages
+        if ($message->message === '/start') {
+            $message->reply("Hello! I'm a bot.");
+        }
+    }
+}
+```
+
+## Starting the Event Handler
+
+### startAndLoop
+
+Start MadelineProto and the event handler with automatic error reporting.
+
+<ParamField path="session" type="string" required>
+  Session name
+</ParamField>
+
+<ParamField path="settings" type="SettingsAbstract">
+  Optional settings configuration
+</ParamField>
+
+```php
+MyEventHandler::startAndLoop('session.madeline');
+```
+
+### startAndLoopBot
+
+Start as a bot with token authentication.
+
+<ParamField path="session" type="string" required>
+  Session name
+</ParamField>
+
+<ParamField path="token" type="string" required>
+  Bot token from @BotFather
+</ParamField>
+
+<ParamField path="settings" type="SettingsAbstract">
+  Optional settings configuration
+</ParamField>
+
+```php
+MyEventHandler::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+## Lifecycle Methods
+
+### onStart
+
+Called when the event handler starts. Use this for initialization.
+
+```php
+public function onStart(): void
+{
+    $this->logger("Initializing bot...");
+    // Your initialization code
+}
+```
+
+### onStop
+
+Called when the event handler is being destroyed.
+
+```php
+public function __destruct()
+{
+    // Cleanup code
+}
+```
+
+## Update Handlers
+
+Handle specific update types by implementing methods with the pattern `onUpdate{UpdateType}`:
+
+```php
+// Handle new messages
+public function onUpdateNewMessage(Message $message): void { }
+
+// Handle edited messages
+public function onUpdateEditMessage(Message $message): void { }
+
+// Handle channel posts
+public function onUpdateNewChannelMessage(Message $message): void { }
+
+// Handle any update type
+public function onAny(\danog\MadelineProto\EventHandler\Update $update): void { }
+```
+
+## Available Namespaces
+
+EventHandler provides direct access to all Telegram API namespaces:
+
+<ResponseField name="auth" type="\danog\MadelineProto\Namespace\Auth">
+  Authentication methods
+</ResponseField>
+
+<ResponseField name="account" type="\danog\MadelineProto\Namespace\Account">
+  Account management
+</ResponseField>
+
+<ResponseField name="users" type="\danog\MadelineProto\Namespace\Users">
+  User-related methods
+</ResponseField>
+
+<ResponseField name="contacts" type="\danog\MadelineProto\Namespace\Contacts">
+  Contact management
+</ResponseField>
+
+<ResponseField name="messages" type="\danog\MadelineProto\Namespace\Messages">
+  Message operations
+</ResponseField>
+
+<ResponseField name="channels" type="\danog\MadelineProto\Namespace\Channels">
+  Channel management
+</ResponseField>
+
+<ResponseField name="bots" type="\danog\MadelineProto\Namespace\Bots">
+  Bot-specific methods
+</ResponseField>
+
+<ResponseField name="photos" type="\danog\MadelineProto\Namespace\Photos">
+  Photo operations
+</ResponseField>
+
+<ResponseField name="upload" type="\danog\MadelineProto\Namespace\Upload">
+  File upload methods
+</ResponseField>
+
+## Plugin System
+
+### getPluginPaths
+
+Specify paths to recursively search for plugins.
+
+<ResponseField name="return" type="string|array<string>|null">
+  Path(s) containing plugin files (ending with Plugin.php)
+</ResponseField>
+
+```php
+public static function getPluginPaths(): string|array|null
+{
+    return __DIR__ . '/plugins';
+}
+```
+
+### getPlugins
+
+Return a list of plugin event handler classes.
+
+<ResponseField name="return" type="array<class-string>">
+  Array of plugin class names
+</ResponseField>
+
+```php
+public static function getPlugins(): array
+{
+    return [
+        \MyBot\Plugins\AdminPlugin::class,
+        \MyBot\Plugins\StatsPlugin::class,
+    ];
+}
+```
+
+## Error Reporting
+
+### getReportPeers
+
+Specify peers where error reports should be sent.
+
+<ResponseField name="return" type="string|int|array<string|int>">
+  Peer(s) to receive error reports
+</ResponseField>
+
+```php
+public function getReportPeers(): string|int|array
+{
+    return '@admin'; // Username, user ID, or array of peers
+}
+```
+
+## Periodic Tasks
+
+### getPeriodicLoop
+
+Obtain a PeriodicLoop instance created by the Cron attribute.
+
+<ParamField path="name" type="string" required>
+  Method name
+</ParamField>
+
+<ResponseField name="return" type="PeriodicLoop|null">
+  The periodic loop instance or null
+</ResponseField>
+
+```php
+$loop = $this->getPeriodicLoop('myTask');
+```
+
+### getPeriodicLoops
+
+Obtain all PeriodicLoop instances.
+
+<ResponseField name="return" type="array<string, PeriodicLoop>">
+  Array of periodic loops indexed by method name
+</ResponseField>
+
+```php
+$loops = $this->getPeriodicLoops();
+```
+
+## Database Properties
+
+### internalSaveDbProperties
+
+Save database properties.
+
+```php
+$this->internalSaveDbProperties();
+```
+
+### internalClearDbProperties
+
+Clear all database properties.
+
+```php
+$this->internalClearDbProperties();
+```
+
+## Example: Complete Bot
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+class MyBot extends EventHandler
+{
+    public function onStart(): void
+    {
+        $this->logger("Bot is running!");
+    }
+
+    #[Incoming]
+    public function handleIncoming(Message $message): void
+    {
+        $text = $message->message;
+        
+        match($text) {
+            '/start' => $message->reply('Welcome!'),
+            '/help' => $message->reply('Available commands: /start, /help'),
+            default => null
+        };
+    }
+    
+    public function getReportPeers(): string
+    {
+        return '@admin_username';
+    }
+}
+
+MyBot::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+## See Also
+
+- [SimpleEventHandler](/api/simple-event-handler) - Simplified event handler with filters
+- [Message Events](/api/events/messages) - Handle message updates
+- [Inline Query Events](/api/events/inline-query) - Handle inline queries
+- [Callback Query Events](/api/events/callback-query) - Handle button callbacks

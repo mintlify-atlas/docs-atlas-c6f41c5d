@@ -1,0 +1,238 @@
+---
+title: Working with Dialogs
+description: Learn how to retrieve and manage dialogs (chats, channels, and conversations) in MadelineProto
+---
+
+## Overview
+
+Dialogs represent your conversations in Telegram, including private chats, groups, channels, and supergroups. MadelineProto provides different methods for bots and users to efficiently retrieve dialog information.
+
+## Bot Accounts: Get Dialog IDs
+
+For bot accounts, use `getDialogIds()` to efficiently retrieve all dialog IDs:
+
+```php
+$dialogIds = $MadelineProto->getDialogIds();
+
+foreach ($dialogIds as $id) {
+    echo "Dialog ID: $id\n";
+    
+    // Get info for specific dialog if needed
+    $info = $MadelineProto->getInfo($id);
+    echo "Type: " . $info['type'] . "\n";
+}
+```
+
+<Note>
+Bot accounts should use `getDialogIds()` instead of `getFullDialogs()` for better performance. The method automatically caches all bot users using the `updates.getDifference` API.
+</Note>
+
+### How It Works (Bots)
+
+For bot accounts, MadelineProto:
+
+1. Calls `updates.getDifference` to fetch all updates
+2. Caches user and chat information from updates
+3. Returns the list of dialog IDs efficiently
+4. Handles `updates.differenceTooLong` by binary searching for the right PTS
+
+This is implemented in `/home/daytona/workspace/source/src/Wrappers/DialogHandler.php:53-101`.
+
+## User Accounts: Get Full Dialogs
+
+For user accounts, use `getFullDialogs()` to retrieve complete dialog information:
+
+```php
+$dialogs = $MadelineProto->getFullDialogs();
+
+foreach ($dialogs as $id => $dialog) {
+    echo "Chat ID: $id\n";
+    echo "Type: " . $dialog['Peer']['_'] . "\n";
+    echo "Top Message: " . $dialog['top_message'] . "\n";
+    
+    // Access unread count
+    if (isset($dialog['unread_count'])) {
+        echo "Unread: " . $dialog['unread_count'] . "\n";
+    }
+}
+```
+
+### Dialog Information
+
+Each dialog contains:
+
+```php
+[
+    'top_message' => 12345,              // ID of most recent message
+    'unread_count' => 5,                 // Number of unread messages
+    'unread_mentions_count' => 0,        // Unread mentions
+    'notify_settings' => [...],          // Notification settings
+    'peer' => [...],                     // Peer information
+    'Peer' => [...],                     // Constructed peer object
+]
+```
+
+## Fetching Dialog Details
+
+The `messages.getDialogs` method is called internally with pagination:
+
+```php
+// Internal parameters used by MadelineProto
+$params = [
+    'limit' => 100,                      // Fetch 100 dialogs at a time
+    'offset_date' => 0,                  // Start from beginning
+    'offset_id' => 0,                    // Message offset
+    'offset_peer' => ['_' => 'inputPeerEmpty'],
+    'hash' => 0,
+];
+```
+
+MadelineProto automatically handles pagination until all dialogs are fetched.
+
+## Dialog Filtering
+
+### Filter by Type
+
+```php
+$dialogs = $MadelineProto->getFullDialogs();
+
+// Get only private chats
+$privateChats = array_filter($dialogs, function($dialog) use ($MadelineProto) {
+    $id = $dialog['peer']['user_id'] ?? 
+          $dialog['peer']['chat_id'] ?? 
+          $dialog['peer']['channel_id'];
+    
+    return $MadelineProto->getInfo($id)['type'] === 'user';
+});
+
+// Get only channels
+$channels = array_filter($dialogs, function($dialog) use ($MadelineProto) {
+    $id = $dialog['peer']['user_id'] ?? 
+          $dialog['peer']['chat_id'] ?? 
+          $dialog['peer']['channel_id'];
+    
+    return $MadelineProto->getInfo($id)['type'] === 'channel';
+});
+```
+
+### Filter by Unread Count
+
+```php
+// Get only dialogs with unread messages
+$unreadDialogs = array_filter($dialogs, function($dialog) {
+    return ($dialog['unread_count'] ?? 0) > 0;
+});
+
+foreach ($unreadDialogs as $id => $dialog) {
+    echo "Unread messages in $id: " . $dialog['unread_count'] . "\n";
+}
+```
+
+## Caching Behavior
+
+### Automatic Caching
+
+MadelineProto can automatically cache all dialogs on startup:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Peer;
+
+$settings = new Settings;
+$settings->getPeer()->setCacheAllPeersOnStartup(true);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+<Warning>
+Enabling `setCacheAllPeersOnStartup(true)` will fetch all dialogs during login, which may take time for accounts with many chats.
+</Warning>
+
+### Manual Cache Control
+
+```php
+// Force refresh dialogs (ignore cache)
+$dialogs = $MadelineProto->getFullDialogs();
+
+// For bots, re-cache all users
+$dialogIds = $MadelineProto->getDialogIds();
+```
+
+## Accessing Messages
+
+Once you have dialog IDs, retrieve messages:
+
+```php
+$dialogs = $MadelineProto->getFullDialogs();
+
+foreach ($dialogs as $id => $dialog) {
+    // Get the 10 most recent messages
+    $messages = $MadelineProto->messages->getHistory([
+        'peer' => $id,
+        'limit' => 10,
+    ]);
+    
+    foreach ($messages['messages'] as $message) {
+        if ($message['_'] === 'message') {
+            echo "Message: " . ($message['message'] ?? '[media]') . "\n";
+        }
+    }
+}
+```
+
+## Performance Best Practices
+
+<AccordionGroup>
+  <Accordion title="For Bot Accounts">
+    - Always use `getDialogIds()` instead of `getFullDialogs()`
+    - Call `getInfo()` only when you need specific dialog details
+    - Cache dialog IDs in your application if needed
+  </Accordion>
+
+  <Accordion title="For User Accounts">
+    - Use `getFullDialogs()` sparingly, as it fetches all conversations
+    - Enable `setCacheAllPeersOnStartup()` only if you need all dialogs immediately
+    - Consider fetching dialogs on-demand rather than all at once
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+```php
+use danog\MadelineProto\Exception;
+use danog\MadelineProto\RPCErrorException;
+
+try {
+    $dialogs = $MadelineProto->getFullDialogs();
+} catch (Exception $e) {
+    if ($MadelineProto->authorization['user']['bot']) {
+        echo "Error: Bots should use getDialogIds() instead\n";
+    } else {
+        echo "Error fetching dialogs: " . $e->getMessage() . "\n";
+    }
+} catch (RPCErrorException $e) {
+    echo "Telegram API error: " . $e->getMessage() . "\n";
+}
+```
+
+## Advanced: Binary Search for PTS
+
+When bot accounts encounter `updates.differenceTooLong`, MadelineProto performs a binary search to find the correct PTS (Persistent Timestamp):
+
+```php
+// This is handled automatically by MadelineProto
+// Source: /home/daytona/workspace/source/src/Wrappers/DialogHandler.php:102-138
+
+// The algorithm:
+// 1. Set bottomPts and topPts bounds
+// 2. Try middle PTS value
+// 3. If differenceTooLong, adjust bottomPts up
+// 4. If success, adjust topPts down
+// 5. Repeat until correct PTS is found
+```
+
+## See Also
+
+- [Chat Info](/guides/chat-info) - Getting detailed chat information
+- [Error Handling](/guides/error-handling) - Handling API errors
+- [API Methods](/api/methods/overview) - Complete API documentation

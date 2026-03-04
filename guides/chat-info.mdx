@@ -1,0 +1,205 @@
+---
+title: Getting Chat Information
+description: Learn how to retrieve information about users, groups, channels, and supergroups using MadelineProto's getInfo method
+---
+
+## Overview
+
+MadelineProto provides the `getInfo` method to retrieve comprehensive information about any peer (user, chat, channel, or supergroup). This method automatically handles username resolution, invite links, and various peer formats.
+
+## Basic Usage
+
+### Get Full Information
+
+```php
+$info = $MadelineProto->getInfo($peer);
+```
+
+The `$peer` parameter can be:
+- **Numeric ID**: User ID, chat ID, or channel ID
+- **Username**: `@username` or `username`
+- **Invite link**: `https://t.me/joinchat/...`
+- **Special strings**: `me` (yourself), `support` (Telegram support)
+- **Arrays**: Update objects or message objects
+
+## Information Types
+
+You can request specific information by passing a type constant:
+
+```php
+use danog\MadelineProto\API;
+
+// Get specific information types
+$botApiId = $MadelineProto->getInfo($peer, API::INFO_TYPE_ID);
+$type = $MadelineProto->getInfo($peer, API::INFO_TYPE_TYPE);
+$constructor = $MadelineProto->getInfo($peer, API::INFO_TYPE_CONSTRUCTOR);
+$inputPeer = $MadelineProto->getInfo($peer, API::INFO_TYPE_PEER);
+```
+
+### Available Info Types
+
+- `API::INFO_TYPE_ALL` - Returns complete information (default)
+- `API::INFO_TYPE_ID` - Returns the bot API ID as an integer
+- `API::INFO_TYPE_TYPE` - Returns peer type: `user`, `chat`, `channel`, or `supergroup`
+- `API::INFO_TYPE_CONSTRUCTOR` - Returns the InputPeer constructor
+- `API::INFO_TYPE_PEER` - Returns the InputPeer object
+- `API::INFO_TYPE_USERNAMES` - Returns array of usernames
+
+## Return Values
+
+When using `API::INFO_TYPE_ALL`, the method returns an array containing:
+
+```php
+[
+    'bot_api_id' => 12345678,           // Bot API format ID
+    'type' => 'user',                   // Peer type
+    'User' => [...],                    // Full user/chat object
+    'InputPeer' => [...],               // InputPeer constructor
+    'Peer' => [...],                    // Peer constructor  
+    'usernames' => ['username'],        // Array of usernames
+    'min' => false,                     // Whether this is min info
+    // Additional fields depending on peer type
+]
+```
+
+## Examples
+
+### Check if Peer is a Bot
+
+```php
+if ($MadelineProto->isBot($peer)) {
+    echo "This peer is a bot";
+}
+```
+
+### Check if Peer is a Forum
+
+```php
+if ($MadelineProto->isForum($peer)) {
+    echo "This is a forum/topic group";
+}
+```
+
+### Get User by Username
+
+```php
+$info = $MadelineProto->getInfo('@username');
+echo "User ID: " . $info['bot_api_id'];
+echo "Type: " . $info['type'];
+```
+
+### Get Channel Information
+
+```php
+$channelInfo = $MadelineProto->getInfo(-1001234567890);
+
+if ($channelInfo['type'] === 'channel') {
+    echo "Channel title: " . $channelInfo['Chat']['title'];
+    echo "Subscribers: " . $channelInfo['full']['participants_count'];
+}
+```
+
+### Resolve Invite Link
+
+```php
+try {
+    $info = $MadelineProto->getInfo('https://t.me/joinchat/AAAAAEkk2WdoDrB4-Q');
+    echo "Chat ID: " . $info['bot_api_id'];
+} catch (\danog\MadelineProto\Exception $e) {
+    echo "You have not joined this chat: " . $e->getMessage();
+}
+```
+
+## Special Peers
+
+### Get Your Own Information
+
+```php
+$myInfo = $MadelineProto->getInfo('me');
+echo "My ID: " . $myInfo['bot_api_id'];
+```
+
+### Get Telegram Support
+
+```php
+$supportInfo = $MadelineProto->getInfo('support');
+// Returns Telegram's support account
+```
+
+## ID Conversion
+
+### Convert to Bot API Format
+
+```php
+$botApiId = $MadelineProto->getId($peer);
+```
+
+### Get InputPeer Constructor
+
+```php
+$inputPeer = $MadelineProto->getInputPeer($peer);
+// Returns inputPeerUser, inputPeerChat, or inputPeerChannel
+```
+
+## Full Information
+
+For complete peer details including description, photo, and statistics:
+
+```php
+$fullInfo = $MadelineProto->getFullInfo($peer);
+
+// Access full details
+echo "Description: " . ($fullInfo['full']['about'] ?? 'N/A');
+echo "Participant count: " . ($fullInfo['full']['participants_count'] ?? 'N/A');
+```
+
+## Error Handling
+
+```php
+use danog\MadelineProto\PeerNotInDbException;
+use danog\MadelineProto\RPCErrorException;
+
+try {
+    $info = $MadelineProto->getInfo($peer);
+} catch (PeerNotInDbException $e) {
+    // Peer not found in database
+    echo "Peer not found: " . $e->getMessage();
+} catch (RPCErrorException $e) {
+    // Telegram API error
+    echo "RPC Error: " . $e->getMessage();
+}
+```
+
+## Performance Considerations
+
+<Note>
+The `getInfo` method automatically caches peer information. If you have a large number of dialogs, consider using `getDialogIds()` for bots instead of fetching full information for each peer.
+</Note>
+
+### For Bots: Get Dialog IDs
+
+```php
+// Efficient way to get all dialog IDs (bot accounts only)
+$dialogIds = $MadelineProto->getDialogIds();
+
+foreach ($dialogIds as $id) {
+    echo "Dialog ID: $id\n";
+}
+```
+
+### For Users: Get Full Dialogs
+
+```php
+// Get all dialogs with full information (user accounts)
+$dialogs = $MadelineProto->getFullDialogs();
+
+foreach ($dialogs as $id => $dialog) {
+    echo "Chat: " . $dialog['Peer']['_'] . " (ID: $id)\n";
+}
+```
+
+## See Also
+
+- [Dialogs](/guides/dialogs) - Working with dialog lists
+- [Error Handling](/guides/error-handling) - Handling exceptions
+- [API Methods](/api/methods/overview) - Complete method documentation

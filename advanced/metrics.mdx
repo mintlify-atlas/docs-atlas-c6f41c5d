@@ -1,0 +1,400 @@
+---
+title: Metrics and Monitoring
+description: Monitor MadelineProto performance with Prometheus and memory profiling
+---
+
+MadelineProto provides built-in support for collecting and exposing performance metrics using Prometheus and memory profiling with memprof. These tools help you monitor your bot's health, performance, and resource usage in production.
+
+## Metrics Configuration
+
+Configure metrics collection through the `Metrics` settings class:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Metrics;
+use Amp\Socket\SocketAddress;
+
+$settings = new Settings;
+
+$metrics = $settings->getMetrics();
+
+// Enable Prometheus metrics collection
+$metrics->setEnablePrometheusCollection(true);
+
+// Enable memprof memory profiling
+$metrics->setEnableMemprofCollection(true);
+
+// Expose metrics via HTTP endpoint
+$metrics->setMetricsBindTo(
+    SocketAddress::fromString('0.0.0.0:9090')
+);
+
+// Return metrics from startAndLoop
+$metrics->setReturnMetricsFromStartAndLoop(true);
+```
+
+## Prometheus Metrics
+
+Prometheus metrics provide detailed statistics about your bot's operation:
+
+### Enabling Prometheus
+
+```php
+$settings->getMetrics()->setEnablePrometheusCollection(true);
+```
+
+This enables collection of:
+
+- Request rates and latencies
+- Message processing times
+- API call statistics
+- Connection pool metrics
+- Memory usage statistics
+
+### HTTP Endpoint Exposure
+
+Expose metrics on a dedicated HTTP endpoint:
+
+```php
+use Amp\Socket\SocketAddress;
+
+$settings->getMetrics()->setMetricsBindTo(
+    SocketAddress::fromString('0.0.0.0:9090')
+);
+```
+
+Metrics will be available at `http://your-server:9090/metrics` in Prometheus format.
+
+### Query String Exposure
+
+Alternatively, expose metrics via query parameters with `startAndLoop`:
+
+```php
+$settings->getMetrics()->setReturnMetricsFromStartAndLoop(true);
+
+MyEventHandler::startAndLoop('bot.madeline?metrics', $settings);
+```
+
+Access metrics by adding `?metrics` to your bot's URL.
+
+## Memory Profiling (memprof)
+
+Memprof provides detailed memory allocation tracking:
+
+### Enabling Memprof
+
+```php
+$settings->getMetrics()->setEnableMemprofCollection(true);
+```
+
+<Note>
+  Requires the **memprof** PHP extension. Included in the official MadelineProto Docker image.
+</Note>
+
+### Accessing Memory Profiles
+
+With HTTP endpoint:
+
+```php
+$settings->getMetrics()->setMetricsBindTo(
+    SocketAddress::fromString('0.0.0.0:9090')
+);
+```
+
+Access profile at `http://your-server:9090/pprof` in pprof format.
+
+With query string:
+
+```php
+$settings->getMetrics()->setReturnMetricsFromStartAndLoop(true);
+
+MyEventHandler::startAndLoop('bot.madeline?pprof', $settings);
+```
+
+### Analyzing Memory Profiles
+
+Use Google's pprof tool to analyze memory dumps:
+
+```bash
+# Download and analyze profile
+curl http://your-server:9090/pprof > heap.pprof
+go tool pprof -http=:8080 heap.pprof
+```
+
+## Complete Metrics Setup
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Metrics;
+use Amp\Socket\SocketAddress;
+
+$settings = new Settings;
+
+// Configure metrics
+$metrics = $settings->getMetrics();
+$metrics->setEnablePrometheusCollection(true);
+$metrics->setEnableMemprofCollection(true);
+$metrics->setMetricsBindTo(
+    SocketAddress::fromString('0.0.0.0:9090')
+);
+
+// Start bot
+MyEventHandler::startAndLoop('bot.madeline', $settings);
+```
+
+Metrics available at:
+- Prometheus: `http://localhost:9090/metrics`
+- Memory profile: `http://localhost:9090/pprof`
+
+## Prometheus Integration
+
+### Prometheus Configuration
+
+Add MadelineProto as a scrape target in `prometheus.yml`:
+
+```yaml
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'madelineproto'
+    static_configs:
+      - targets: ['bot:9090']
+        labels:
+          instance: 'telegram-bot'
+```
+
+### Docker Compose with Prometheus
+
+```yaml
+version: '3.8'
+
+services:
+  bot:
+    build: .
+    container_name: madelineproto-bot
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    environment:
+      - ENABLE_METRICS=true
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+
+volumes:
+  prometheus_data:
+  grafana_data:
+```
+
+## Grafana Dashboards
+
+Create dashboards to visualize MadelineProto metrics:
+
+### Key Metrics to Monitor
+
+<CardGroup cols={2}>
+  <Card title="Request Rate" icon="chart-line">
+    Track API requests per second
+  </Card>
+  <Card title="Response Time" icon="clock">
+    Monitor API call latencies
+  </Card>
+  <Card title="Memory Usage" icon="memory">
+    Watch memory consumption trends
+  </Card>
+  <Card title="Error Rate" icon="triangle-exclamation">
+    Track failed requests and errors
+  </Card>
+</CardGroup>
+
+### Example PromQL Queries
+
+```promql
+# Request rate
+rate(madelineproto_requests_total[5m])
+
+# Average response time
+rate(madelineproto_request_duration_seconds_sum[5m]) / 
+rate(madelineproto_request_duration_seconds_count[5m])
+
+# Memory usage
+madelineproto_memory_bytes
+
+# Error rate
+rate(madelineproto_errors_total[5m])
+```
+
+## Environment-Based Configuration
+
+```php
+$settings = new Settings;
+
+if (getenv('ENABLE_METRICS') === 'true') {
+    $metrics = $settings->getMetrics();
+    $metrics->setEnablePrometheusCollection(true);
+    
+    if ($metricsPort = getenv('METRICS_PORT')) {
+        $metrics->setMetricsBindTo(
+            SocketAddress::fromString("0.0.0.0:{$metricsPort}")
+        );
+    }
+}
+
+if (getenv('ENABLE_MEMPROF') === 'true') {
+    $settings->getMetrics()->setEnableMemprofCollection(true);
+}
+```
+
+## Performance Considerations
+
+<Warning>
+  **Important:** Metrics collection has a small performance overhead. Enable only in production environments where monitoring is required.
+</Warning>
+
+### Best Practices
+
+- **Production Only**: Enable metrics in production, not development
+- **Dedicated Port**: Use a separate port for metrics (not the main application port)
+- **Firewall**: Restrict metrics endpoint access to monitoring systems
+- **Scrape Interval**: Use reasonable Prometheus scrape intervals (15-60s)
+- **Memory Profiling**: Enable memprof only when debugging memory issues
+
+## Alerting Rules
+
+Set up Prometheus alerts for critical conditions:
+
+```yaml
+groups:
+  - name: madelineproto_alerts
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: rate(madelineproto_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          
+      - alert: HighMemoryUsage
+        expr: madelineproto_memory_bytes > 1e9
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory usage above 1GB"
+          
+      - alert: BotDown
+        expr: up{job="madelineproto"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Bot is down"
+```
+
+## Metrics API Reference
+
+### setEnablePrometheusCollection
+
+Enable or disable Prometheus metrics collection.
+
+```php
+public function setEnablePrometheusCollection(bool $enable): self
+```
+
+**Parameters:**
+- `$enable` - Whether to enable Prometheus collection
+
+**Returns:** `self` for method chaining
+
+### setEnableMemprofCollection
+
+Enable or disable memprof memory profiling.
+
+```php
+public function setEnableMemprofCollection(bool $enable): self
+```
+
+**Parameters:**
+- `$enable` - Whether to enable memprof collection
+
+**Returns:** `self` for method chaining
+
+### setMetricsBindTo
+
+Expose metrics via HTTP on the specified address.
+
+```php
+public function setMetricsBindTo(?SocketAddress $metricsBindTo): self
+```
+
+**Parameters:**
+- `$metricsBindTo` - Socket address to bind to, or null to disable
+
+**Returns:** `self` for method chaining
+
+### setReturnMetricsFromStartAndLoop
+
+Expose metrics via query string with `startAndLoop`.
+
+```php
+public function setReturnMetricsFromStartAndLoop(bool $enable): self
+```
+
+**Parameters:**
+- `$enable` - Whether to enable query string metrics
+
+**Returns:** `self` for method chaining
+
+## Troubleshooting
+
+### Metrics Endpoint Not Accessible
+
+1. Check firewall rules
+2. Verify bind address is correct
+3. Ensure port is not already in use
+4. Check Docker port mappings
+
+### High Memory Usage
+
+1. Enable memprof to identify allocations
+2. Reduce database cache TTL
+3. Check for memory leaks in event handlers
+4. Monitor Grafana memory trends
+
+### Prometheus Not Scraping
+
+1. Verify Prometheus can reach the metrics endpoint
+2. Check Prometheus logs for errors
+3. Validate scrape configuration
+4. Test endpoint manually with curl
+
+## See Also
+
+- [Docker Deployment](/advanced/docker)
+- [Settings Configuration](/advanced/settings)
+- [Database Configuration](/advanced/database)

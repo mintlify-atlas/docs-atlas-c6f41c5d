@@ -1,0 +1,309 @@
+---
+title: Full Bot Example
+description: Complete bot implementation showcasing all major MadelineProto features including filters, commands, broadcasting, and file handling
+---
+
+This comprehensive example demonstrates advanced MadelineProto features. The code is from the official `bot.php` example.
+
+## Core Event Handler
+
+```php
+<?php declare(strict_types=1);
+
+use danog\MadelineProto\API;
+use danog\MadelineProto\Broadcast\Progress;
+use danog\MadelineProto\Broadcast\Status;
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+use danog\MadelineProto\EventHandler\Filter\FilterText;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\ParseMode;
+use danog\MadelineProto\SimpleEventHandler;
+
+class MyEventHandler extends SimpleEventHandler
+{
+    public const ADMIN = "@me"; // !!! Change this to your username !!!
+    
+    private array $notifiedChats = [];
+
+    /**
+     * Get peer(s) where to report errors.
+     */
+    public function getReportPeers()
+    {
+        return [self::ADMIN];
+    }
+}
+```
+
+## Lifecycle Methods
+
+### Startup Logic
+
+```php
+public function onStart(): void
+{
+    $this->logger("The bot was started!");
+    $this->logger($this->getFullInfo('MadelineProto'));
+    
+    $this->sendMessageToAdmins("The bot was started!");
+}
+```
+
+<Tip>
+The `onStart()` method runs once when the bot starts, perfect for initialization tasks.
+</Tip>
+
+### Property Persistence
+
+```php
+public function __sleep(): array
+{
+    return ['notifiedChats'];
+}
+```
+
+<Note>
+Properties returned by `__sleep()` are automatically saved to the database (MySQL/Postgres/Redis if configured, session file otherwise).
+</Note>
+
+## Command Handlers
+
+### Echo Command
+
+```php
+#[FilterCommand('echo')]
+public function echoCmd(Message $message): void
+{
+    // Contains the arguments of the command
+    $args = $message->commandArgs;
+    
+    $message->reply($args[0] ?? '');
+}
+```
+
+### Story Command (Admin Only)
+
+```php
+#[FilterCommand('story')]
+public function storyCommand(Message & FromAdmin $message): void
+{
+    if ($this->isSelfBot()) {
+        $message->reply("Only users can post Telegram Stories!");
+        return;
+    }
+    $media = $message->getReply(Message::class)?->media;
+    if (!$media) {
+        $message->reply("You should reply to a photo or video to repost it as a story!");
+        return;
+    }
+    
+    $this->stories->sendStory(
+        peer: 'me',
+        media: $media,
+        caption: "This story was posted using [MadelineProto](https://t.me/MadelineProto)!",
+        parse_mode: ParseMode::MARKDOWN,
+        privacy_rules: [['_' => 'inputPrivacyValueAllowAll']]
+    );
+}
+```
+
+### Reaction Commands
+
+```php
+#[FilterCommand('react')]
+public function reactCommand(Message&IsReply $message): void
+{
+    $message->getReply(Message::class)->addReaction('👌');
+}
+
+#[FilterCommand('unreact')]
+public function unreactCommand(Message&IsReply $message): void
+{
+    $message->getReply(Message::class)->delReaction('👌');
+}
+```
+
+## Filter Examples
+
+### Text Filters
+
+```php
+#[FilterText('test')]
+public function pingCommand(Message $message): void
+{
+    $message->reply('test reply');
+}
+
+#[FilterTextCaseInsensitive('hi')]
+public function pingCommandCaseInsensitive(Message $message): void
+{
+    $message->reply('hello');
+}
+```
+
+### Regex Filter
+
+```php
+#[FilterRegex('/.*(mt?proto)[^.]?.*/i')]
+public function testRegex(Incoming & Message $message): void
+{
+    $message->reply("Did you mean to write MadelineProto instead of ".$message->matches[1].'?');
+}
+```
+
+<Tip>
+Regex matches are available in `$message->matches` array.
+</Tip>
+
+## Broadcasting
+
+### Broadcast Command
+
+```php
+#[FilterCommand('broadcast')]
+public function broadcastCommand(Message & FromAdmin $message): void
+{
+    if (!$message->replyToMsgId) {
+        $message->reply("You should reply to the message you want to broadcast.");
+        return;
+    }
+    $this->broadcastForwardMessages(
+        from_peer: $message->senderId,
+        message_ids: [$message->replyToMsgId],
+        drop_author: true,
+        pin: true,
+    );
+}
+```
+
+### Progress Tracking
+
+```php
+private int $lastLog = 0;
+
+#[Handler]
+public function handleBroadcastProgress(Progress $progress): void
+{
+    if (time() - $this->lastLog > 5 || $progress->status === Status::FINISHED) {
+        $this->lastLog = time();
+        $this->sendMessageToAdmins((string) $progress);
+    }
+}
+```
+
+<Note>
+Broadcast progress updates are sent automatically. Track them with a `Progress` handler.
+</Note>
+
+## File Handling
+
+### Download Link Generation
+
+```php
+#[FilterCommand('dl')]
+public function downloadLink(Incoming&Message $message): void
+{
+    $reply = $message->getReply(Message::class);
+    if (!$reply?->media) {
+        $message->reply("This command must reply to a media message!");
+        return;
+    }
+    $reply->reply("Download link: ".$reply->media->getDownloadLink());
+}
+```
+
+<Tip>
+The bot must be started via web for download links to work, or configure a download script URL in settings.
+</Tip>
+
+## Cron Jobs
+
+```php
+#[Cron(period: 60.0)]
+public function cron1(): void
+{
+    $this->sendMessageToAdmins("The bot is online, current time ".date(DATE_RFC850)."!");
+}
+```
+
+<Note>
+Cron functions execute periodically. The period is specified in seconds.
+</Note>
+
+## Event-Specific Handlers
+
+### Photo Changed Events
+
+```php
+#[Handler]
+public function logPhotoChanged(Incoming&DialogPhotoChanged $message): void
+{
+    if ($message->photo) {
+        $message->reply("Nice! Here's a download link for the photo: ".$message->photo->getDownloadLink());
+    } else {
+        $message->reply("Hmm, why did you delete the group photo?");
+    }
+}
+```
+
+### Auto-Comment on Channel Posts
+
+```php
+#[Handler]
+public function makeComment(Incoming&ChannelMessage $message): void
+{
+    if ($this->isSelfBot()) {
+        return;
+    }
+    $message->getDiscussion()->reply(
+        message: "This comment is powered by [MadelineProto](https://t.me/MadelineProto)!",
+        parseMode: ParseMode::MARKDOWN
+    );
+}
+```
+
+## Configuration
+
+### Database Setup
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Mysql;
+use danog\MadelineProto\Settings\Database\Postgres;
+use danog\MadelineProto\Settings\Database\Redis;
+
+$settings = new Settings;
+
+// Redis
+$settings->setDb((new Redis)->setDatabase(0)->setPassword('pony'));
+
+// PostgreSQL
+$settings->setDb((new Postgres)->setDatabase('MadelineProto')->setUsername('daniil')->setPassword('pony'));
+
+// MySQL
+$settings->setDb((new Mysql)->setDatabase('MadelineProto')->setUsername('daniil')->setPassword('pony'));
+```
+
+### Starting the Bot
+
+```php
+// For users or bots
+MyEventHandler::startAndLoop('bot.madeline', $settings);
+
+// For bots only (with token)
+MyEventHandler::startAndLoopBot('bot.madeline', 'bot token', $settings);
+```
+
+## Complete Working Example
+
+See the full source code at: [examples/bot.php](https://github.com/danog/MadelineProto/blob/v8/examples/bot.php)
+
+## Next Steps
+
+- Learn about [Broadcasting](/examples/broadcasting) in detail
+- Explore [File Downloads](/examples/file-download)
+- Try [Voice Calls](/examples/voice-calls)
+- Check out [Plugins](/examples/plugins)

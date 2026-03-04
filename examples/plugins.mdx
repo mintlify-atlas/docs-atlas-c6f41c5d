@@ -1,0 +1,410 @@
+---
+title: Plugin System Example
+description: Create modular, reusable bot components with the MadelineProto plugin system
+---
+
+Plugins allow you to create modular, reusable components for your MadelineProto bots. They can be enabled/disabled dynamically and shared across projects.
+
+## Basic Plugin
+
+Here's a complete working plugin from `plugins/Danogentili/PingPlugin.php`:
+
+```php
+<?php declare(strict_types=1);
+
+namespace MadelinePlugin\Danogentili;
+
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+use danog\MadelineProto\EventHandler\Filter\FilterText;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\PluginEventHandler;
+
+/**
+ * Plugin event handler class.
+ *
+ * All properties returned by __sleep are automatically stored in the database.
+ */
+class PingPlugin extends PluginEventHandler
+{
+    private int $pingCount = 0;
+    private string $pongText = 'pong';
+
+    /**
+     * You can set a custom pong text from the outside of the plugin:
+     *
+     * ```
+     * if (!file_exists('madeline.php')) {
+     *     copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+     * }
+     * include 'madeline.php';
+     *
+     * $a = new API('bot.madeline');
+     * $plugin = $a->getPlugin(PingPlugin::class);
+     *
+     * $plugin->setPongText('UwU');
+     * ```
+     *
+     * This will automatically connect to the running instance of the plugin 
+     * and call the specified method.
+     */
+    public function setPongText(string $pong): void
+    {
+        $this->pongText = $pong;
+    }
+
+    /**
+     * Returns a list of names for properties that will be automatically saved 
+     * to the session database (MySQL/postgres/redis if configured, 
+     * the session file otherwise).
+     */
+    public function __sleep(): array
+    {
+        return ['pingCount', 'pongText'];
+    }
+    
+    /**
+     * Initialization logic.
+     */
+    public function onStart(): void
+    {
+        $this->logger("The bot was started!");
+        $this->logger($this->getFullInfo('MadelineProto'));
+        $this->sendMessageToAdmins("The bot was started!");
+    }
+
+    /**
+     * Plugins may be enabled or disabled at startup by returning true or false.
+     */
+    public function isPluginEnabled(): bool
+    {
+        return true;
+    }
+
+    /**
+     * This cron function will be executed forever, every 60 seconds.
+     */
+    #[Cron(period: 60.0)]
+    public function cron1(): void
+    {
+        $this->sendMessageToAdmins(
+            "The ping plugin is online, total pings so far: ".$this->pingCount
+        );
+    }
+
+    #[FilterText('ping')]
+    public function pingCommand(Incoming&Message $message): void
+    {
+        $message->reply($this->pongText);
+        $this->pingCount++;
+    }
+}
+```
+
+## Plugin Base Bot
+
+From `PluginBase.php`, here's how to create a bot that only uses plugins:
+
+```php
+<?php declare(strict_types=1);
+
+if (file_exists('vendor/autoload.php')) {
+    require_once 'vendor/autoload.php';
+} else {
+    if (!file_exists('madeline.php')) {
+        copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+    }
+    require_once 'madeline.php';
+}
+
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Mysql;
+use danog\MadelineProto\Settings\Database\Postgres;
+use danog\MadelineProto\Settings\Database\Redis;
+use danog\MadelineProto\SimpleEventHandler;
+
+/** Base event handler class that only includes plugins */
+class BaseHandler extends SimpleEventHandler
+{
+    public static function getPluginPaths(): array|string|null
+    {
+        return 'plugins/';
+    }
+}
+
+$settings = new Settings;
+$settings->getLogger()->setLevel(Logger::LEVEL_ULTRA_VERBOSE);
+
+// You can also use Redis, MySQL or PostgreSQL
+// $settings->setDb((new Redis)->setDatabase(0)->setPassword('pony'));
+// $settings->setDb((new Postgres)->setDatabase('MadelineProto')->setUsername('daniil')->setPassword('pony'));
+// $settings->setDb((new Mysql)->setDatabase('MadelineProto')->setUsername('daniil')->setPassword('pony'));
+
+// For users or bots
+BaseHandler::startAndLoop('bot.madeline', $settings);
+
+// For bots only
+// BaseHandler::startAndLoopBot('bot.madeline', 'bot token', $settings);
+```
+
+## Using Plugins in Your Bot
+
+From `bot.php`, add plugins to your event handler:
+
+```php
+class MyEventHandler extends SimpleEventHandler
+{
+    public const ADMIN = "@me";
+    
+    /**
+     * Returns a set of plugins to activate.
+     */
+    public static function getPlugins(): array
+    {
+        return [
+            RestartPlugin::class,
+        ];
+    }
+    
+    /**
+     * Returns the plugin directory path.
+     */
+    public static function getPluginPaths(): string|array|null
+    {
+        return 'plugins/';
+    }
+}
+```
+
+<Tip>
+Plugins can be loaded from specific classes (via `getPlugins()`) or auto-discovered from directories (via `getPluginPaths()`).
+</Tip>
+
+## Key Plugin Features
+
+### 1. Extend PluginEventHandler
+
+```php
+use danog\MadelineProto\PluginEventHandler;
+
+class MyPlugin extends PluginEventHandler
+{
+    // Your plugin code
+}
+```
+
+### 2. Persistent State
+
+```php
+private int $pingCount = 0;
+private string $pongText = 'pong';
+
+public function __sleep(): array
+{
+    return ['pingCount', 'pongText'];
+}
+```
+
+<Note>
+Properties returned by `__sleep()` are automatically persisted to the database.
+</Note>
+
+### 3. Enable/Disable Logic
+
+```php
+public function isPluginEnabled(): bool
+{
+    // Add custom logic to enable/disable the plugin
+    return true;
+}
+```
+
+### 4. Initialization
+
+```php
+public function onStart(): void
+{
+    $this->logger("Plugin initialized!");
+    $this->sendMessageToAdmins("Plugin is ready!");
+}
+```
+
+### 5. External API
+
+Call plugin methods from outside:
+
+```php
+// In a separate script
+$a = new API('bot.madeline');
+$plugin = $a->getPlugin(PingPlugin::class);
+$plugin->setPongText('UwU');
+```
+
+<Tip>
+This automatically connects to the running bot instance and calls the method via IPC.
+</Tip>
+
+## Plugin Directory Structure
+
+```
+plugins/
+└── Danogentili/
+    ├── PingPlugin.php
+    └── OnlinePlugin.php
+```
+
+Namespace structure:
+
+```php
+namespace MadelinePlugin\Danogentili;
+```
+
+<Note>
+Plugin namespaces must start with `MadelinePlugin\` followed by your organization/author name.
+</Note>
+
+## Built-in Plugins
+
+### RestartPlugin
+
+Provides a `/restart` command for admins:
+
+```php
+use danog\MadelineProto\EventHandler\Plugin\RestartPlugin;
+
+public static function getPlugins(): array
+{
+    return [
+        RestartPlugin::class,
+    ];
+}
+```
+
+<Note>
+When using RestartPlugin, run your bot in a loop: `while true; do php bot.php; done`
+</Note>
+
+## Plugin with Cron Jobs
+
+```php
+#[Cron(period: 60.0)]
+public function cron1(): void
+{
+    $this->sendMessageToAdmins(
+        "The ping plugin is online, total pings so far: ".$this->pingCount
+    );
+}
+```
+
+Cron jobs in plugins work the same as in event handlers.
+
+## Plugin with Filters
+
+```php
+#[FilterText('ping')]
+public function pingCommand(Incoming&Message $message): void
+{
+    $message->reply($this->pongText);
+    $this->pingCount++;
+}
+```
+
+All filter attributes work in plugins:
+- `#[FilterCommand('command')]`
+- `#[FilterText('text')]`
+- `#[FilterRegex('/pattern/')]`
+- And more...
+
+## Multiple Plugin Directories
+
+```php
+public static function getPluginPaths(): array
+{
+    return [
+        'plugins/',
+        'vendor/myorg/plugins/',
+        'custom_plugins/',
+    ];
+}
+```
+
+## Plugin Configuration
+
+Plugins can access bot settings:
+
+```php
+public function onStart(): void
+{
+    $botInfo = $this->getSelf();
+    $this->logger("Running as: " . $botInfo['username']);
+}
+```
+
+## Combining Event Handlers and Plugins
+
+```php
+class MyEventHandler extends SimpleEventHandler
+{
+    // Your main bot logic
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void
+    {
+        // Main handler
+    }
+    
+    // Load plugins
+    public static function getPlugins(): array
+    {
+        return [RestartPlugin::class];
+    }
+    
+    public static function getPluginPaths(): string
+    {
+        return 'plugins/';
+    }
+}
+```
+
+<Tip>
+Plugins and event handlers work together. The main event handler processes updates first, then plugins.
+</Tip>
+
+## Sharing Plugins
+
+Plugins can be packaged and shared:
+
+1. Create a composer package
+2. Include your plugin classes
+3. Users install via `composer require yourorg/plugin`
+4. Point `getPluginPaths()` to the vendor directory
+
+## Best Practices
+
+<Note>
+**Use namespaces.** Always namespace your plugins as `MadelinePlugin\YourOrg\PluginName`.
+</Note>
+
+<Tip>
+**Persist important state.** Use `__sleep()` to save counters, settings, and other persistent data.
+</Tip>
+
+<Tip>
+**Make plugins configurable.** Provide setter methods that can be called via `getPlugin()`.
+</Tip>
+
+<Note>
+**Document your plugins.** Include docblocks explaining what each plugin does and how to configure it.
+</Note>
+
+## Complete Working Example
+
+See the full examples:
+- [PingPlugin.php](https://github.com/danog/MadelineProto/blob/v8/examples/plugins/Danogentili/PingPlugin.php)
+- [PluginBase.php](https://github.com/danog/MadelineProto/blob/v8/examples/PluginBase.php)
+
+## Next Steps
+
+- Learn about [Filters](/concepts/filters) for message handling
+- Check out the [Full Bot Example](/examples/full-bot)
+- Read the [Plugin Documentation](https://docs.madelineproto.xyz/docs/PLUGINS.html)

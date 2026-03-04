@@ -1,0 +1,538 @@
+---
+title: Message Methods
+description: Methods for sending, editing, and managing messages
+---
+
+# Message Methods
+
+The `messages` namespace provides methods for working with messages in Telegram.
+
+## Accessing Messages Methods
+
+```php
+// In EventHandler
+$this->messages->sendMessage([...]);
+
+// In API instance
+$MadelineProto->messages->sendMessage([...]);
+```
+
+## Sending Messages
+
+### sendMessage
+
+Send a text message.
+
+<ParamField path="peer" type="string|int" required>
+  Destination peer (username, ID, or peer object)
+</ParamField>
+
+<ParamField path="message" type="string" required>
+  Message text (up to 4096 characters)
+</ParamField>
+
+<ParamField path="parse_mode" type="string">
+  Parse mode: 'Markdown', 'HTML', or 'MarkdownV2'
+</ParamField>
+
+<ParamField path="reply_to_msg_id" type="int">
+  Message ID to reply to
+</ParamField>
+
+<ParamField path="reply_markup" type="array">
+  Inline keyboard or reply keyboard
+</ParamField>
+
+<ParamField path="no_webpage" type="bool" default="false">
+  Disable link previews
+</ParamField>
+
+<ParamField path="silent" type="bool" default="false">
+  Send silently (no notification)
+</ParamField>
+
+<ParamField path="schedule_date" type="int">
+  Schedule message (Unix timestamp)
+</ParamField>
+
+<ParamField path="clear_draft" type="bool" default="false">
+  Clear draft after sending
+</ParamField>
+
+```php
+// Simple message
+$this->messages->sendMessage([
+    'peer' => '@username',
+    'message' => 'Hello from MadelineProto!',
+]);
+
+// With formatting
+$this->messages->sendMessage([
+    'peer' => $chatId,
+    'message' => '**Bold** and _italic_ text',
+    'parse_mode' => 'Markdown',
+]);
+
+// With keyboard
+$this->messages->sendMessage([
+    'peer' => $chatId,
+    'message' => 'Choose an option:',
+    'reply_markup' => [
+        'inline_keyboard' => [[
+            ['text' => 'Button 1', 'callback_data' => 'btn1'],
+            ['text' => 'Button 2', 'callback_data' => 'btn2'],
+        ]],
+    ],
+]);
+
+// Reply to message
+$this->messages->sendMessage([
+    'peer' => $chatId,
+    'message' => 'This is a reply',
+    'reply_to_msg_id' => $messageId,
+]);
+
+// Silent message
+$this->messages->sendMessage([
+    'peer' => $chatId,
+    'message' => 'Silent notification',
+    'silent' => true,
+]);
+
+// Schedule message
+$this->messages->sendMessage([
+    'peer' => $chatId,
+    'message' => 'Scheduled message',
+    'schedule_date' => time() + 3600, // Send in 1 hour
+]);
+```
+
+### sendMedia
+
+Send media (photos, videos, documents).
+
+<ParamField path="peer" type="string|int" required>
+  Destination peer
+</ParamField>
+
+<ParamField path="media" type="array" required>
+  Media object
+</ParamField>
+
+<ParamField path="message" type="string" default="">
+  Caption text
+</ParamField>
+
+<ParamField path="parse_mode" type="string">
+  Caption parse mode
+</ParamField>
+
+<ParamField path="reply_to_msg_id" type="int">
+  Message ID to reply to
+</ParamField>
+
+<ParamField path="silent" type="bool" default="false">
+  Send silently
+</ParamField>
+
+```php
+// Send photo from path
+$this->messages->sendMedia([
+    'peer' => $chatId,
+    'media' => [
+        '_' => 'inputMediaUploadedPhoto',
+        'file' => '/path/to/photo.jpg',
+    ],
+    'message' => 'Photo caption',
+]);
+
+// Send document
+$this->messages->sendMedia([
+    'peer' => $chatId,
+    'media' => [
+        '_' => 'inputMediaUploadedDocument',
+        'file' => '/path/to/file.pdf',
+        'attributes' => [
+            ['_' => 'documentAttributeFilename', 'file_name' => 'document.pdf'],
+        ],
+    ],
+    'message' => 'Here is your document',
+]);
+
+// Send from URL
+$this->messages->sendMedia([
+    'peer' => $chatId,
+    'media' => [
+        '_' => 'inputMediaPhotoExternal',
+        'url' => 'https://example.com/image.jpg',
+    ],
+]);
+```
+
+## Editing Messages
+
+### editMessage
+
+Edit a sent message.
+
+<ParamField path="peer" type="string|int" required>
+  Peer where message was sent
+</ParamField>
+
+<ParamField path="id" type="int" required>
+  Message ID to edit
+</ParamField>
+
+<ParamField path="message" type="string" required>
+  New message text
+</ParamField>
+
+<ParamField path="parse_mode" type="string">
+  Parse mode
+</ParamField>
+
+<ParamField path="reply_markup" type="array">
+  New keyboard
+</ParamField>
+
+<ParamField path="no_webpage" type="bool" default="false">
+  Disable link previews
+</ParamField>
+
+```php
+$this->messages->editMessage([
+    'peer' => $chatId,
+    'id' => $messageId,
+    'message' => 'Updated message text',
+]);
+
+// Edit with new keyboard
+$this->messages->editMessage([
+    'peer' => $chatId,
+    'id' => $messageId,
+    'message' => 'Updated message',
+    'reply_markup' => [
+        'inline_keyboard' => [[
+            ['text' => 'New Button', 'callback_data' => 'new'],
+        ]],
+    ],
+]);
+```
+
+## Deleting Messages
+
+### deleteMessages
+
+Delete messages.
+
+<ParamField path="id" type="array<int>" required>
+  Array of message IDs to delete
+</ParamField>
+
+<ParamField path="revoke" type="bool" default="true">
+  Delete for all users (requires permissions)
+</ParamField>
+
+```php
+// Delete single message
+$this->messages->deleteMessages([
+    'id' => [$messageId],
+    'revoke' => true,
+]);
+
+// Delete multiple messages
+$this->messages->deleteMessages([
+    'id' => [123, 124, 125],
+    'revoke' => true,
+]);
+```
+
+## Forwarding Messages
+
+### forwardMessages
+
+Forward messages to another chat.
+
+<ParamField path="from_peer" type="string|int" required>
+  Source peer
+</ParamField>
+
+<ParamField path="to_peer" type="string|int" required>
+  Destination peer
+</ParamField>
+
+<ParamField path="id" type="array<int>" required>
+  Message IDs to forward
+</ParamField>
+
+<ParamField path="silent" type="bool" default="false">
+  Forward silently
+</ParamField>
+
+<ParamField path="drop_author" type="bool" default="false">
+  Hide original sender
+</ParamField>
+
+```php
+// Forward message
+$this->messages->forwardMessages([
+    'from_peer' => $sourceChat,
+    'to_peer' => $destChat,
+    'id' => [$messageId],
+]);
+
+// Forward without attribution
+$this->messages->forwardMessages([
+    'from_peer' => $sourceChat,
+    'to_peer' => $destChat,
+    'id' => [$messageId],
+    'drop_author' => true,
+]);
+```
+
+## Getting Messages
+
+### getHistory
+
+Get message history.
+
+<ParamField path="peer" type="string|int" required>
+  Peer to get history from
+</ParamField>
+
+<ParamField path="offset_id" type="int" default="0">
+  Offset message ID
+</ParamField>
+
+<ParamField path="limit" type="int" default="100">
+  Number of messages to retrieve (max 100)
+</ParamField>
+
+<ParamField path="max_id" type="int" default="0">
+  Maximum message ID
+</ParamField>
+
+<ParamField path="min_id" type="int" default="0">
+  Minimum message ID
+</ParamField>
+
+```php
+// Get latest messages
+$history = $this->messages->getHistory([
+    'peer' => $chatId,
+    'limit' => 50,
+]);
+
+// Get messages before specific ID
+$history = $this->messages->getHistory([
+    'peer' => $chatId,
+    'offset_id' => $messageId,
+    'limit' => 50,
+]);
+```
+
+### getMessages
+
+Get specific messages by ID.
+
+<ParamField path="id" type="array<int>" required>
+  Message IDs
+</ParamField>
+
+```php
+$messages = $this->messages->getMessages([
+    'id' => [123, 456, 789],
+]);
+```
+
+## Search
+
+### search
+
+Search messages.
+
+<ParamField path="peer" type="string|int" required>
+  Peer to search in
+</ParamField>
+
+<ParamField path="q" type="string" required>
+  Search query
+</ParamField>
+
+<ParamField path="filter" type="array" default="{'_': 'inputMessagesFilterEmpty'}">
+  Message filter
+</ParamField>
+
+<ParamField path="limit" type="int" default="100">
+  Number of results
+</ParamField>
+
+```php
+// Search for text
+$results = $this->messages->search([
+    'peer' => $chatId,
+    'q' => 'search term',
+    'limit' => 50,
+]);
+
+// Search for photos
+$results = $this->messages->search([
+    'peer' => $chatId,
+    'q' => '',
+    'filter' => ['_' => 'inputMessagesFilterPhotos'],
+    'limit' => 50,
+]);
+
+// Search for documents
+$results = $this->messages->search([
+    'peer' => $chatId,
+    'q' => '',
+    'filter' => ['_' => 'inputMessagesFilterDocument'],
+]);
+```
+
+## Pinning Messages
+
+### updatePinnedMessage
+
+Pin a message.
+
+<ParamField path="peer" type="string|int" required>
+  Peer
+</ParamField>
+
+<ParamField path="id" type="int" required>
+  Message ID to pin
+</ParamField>
+
+<ParamField path="silent" type="bool" default="false">
+  Pin silently
+</ParamField>
+
+<ParamField path="pm_oneside" type="bool" default="false">
+  Pin only for yourself in PM
+</ParamField>
+
+```php
+// Pin message
+$this->messages->updatePinnedMessage([
+    'peer' => $chatId,
+    'id' => $messageId,
+]);
+
+// Pin silently
+$this->messages->updatePinnedMessage([
+    'peer' => $chatId,
+    'id' => $messageId,
+    'silent' => true,
+]);
+```
+
+### unpinAllMessages
+
+Unpin all messages.
+
+<ParamField path="peer" type="string|int" required>
+  Peer
+</ParamField>
+
+```php
+$this->messages->unpinAllMessages([
+    'peer' => $chatId,
+]);
+```
+
+## Read History
+
+### readHistory
+
+Mark messages as read.
+
+<ParamField path="peer" type="string|int" required>
+  Peer
+</ParamField>
+
+<ParamField path="max_id" type="int" required>
+  Mark as read up to this message ID
+</ParamField>
+
+```php
+$this->messages->readHistory([
+    'peer' => $chatId,
+    'max_id' => $messageId,
+]);
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+use danog\MadelineProto\ParseMode;
+
+class MessageBot extends EventHandler
+{
+    #[FilterRegex('/^\/send (.+)/')]
+    public function handleSend(Message $message): void
+    {
+        $text = $message->matches[1];
+        
+        // Send message
+        $this->messages->sendMessage([
+            'peer' => $message->chatId,
+            'message' => "You said: $text",
+            'reply_to_msg_id' => $message->id,
+        ]);
+    }
+    
+    #[FilterRegex('/^\/forward (\d+)/')]
+    public function handleForward(Message $message): void
+    {
+        $msgId = (int)$message->matches[1];
+        
+        // Forward message
+        $this->messages->forwardMessages([
+            'from_peer' => $message->chatId,
+            'to_peer' => $message->chatId,
+            'id' => [$msgId],
+        ]);
+    }
+    
+    #[FilterRegex('/^\/search (.+)/')]
+    public function handleSearch(Message $message): void
+    {
+        $query = $message->matches[1];
+        
+        // Search messages
+        $results = $this->messages->search([
+            'peer' => $message->chatId,
+            'q' => $query,
+            'limit' => 10,
+        ]);
+        
+        $count = count($results['messages']);
+        $message->reply("Found $count messages matching '$query'");
+    }
+    
+    #[FilterRegex('/^\/edit (\d+) (.+)/')]
+    public function handleEdit(Message $message): void
+    {
+        $msgId = (int)$message->matches[1];
+        $newText = $message->matches[2];
+        
+        // Edit message
+        $this->messages->editMessage([
+            'peer' => $message->chatId,
+            'id' => $msgId,
+            'message' => $newText,
+        ]);
+    }
+}
+```
+
+## See Also
+
+- [Methods Overview](/api/methods/overview) - All available methods
+- [Channel Methods](/api/methods/channels) - Channel operations
+- [Message Events](/api/events/messages) - Handling message updates

@@ -1,0 +1,450 @@
+---
+title: Message Handling
+description: Send, receive, edit, and manage messages with MadelineProto's comprehensive message API
+---
+
+## Message Types
+
+MadelineProto provides typed message classes for different chat types:
+
+- `Message` - Base message class
+- `PrivateMessage` - Messages in private chats
+- `GroupMessage` - Messages in groups
+- `ChannelMessage` - Messages in channels
+- `SecretMessage` - Messages in secret chats
+
+## Receiving Messages
+
+Handle incoming messages using event handlers with type filters:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\SimpleEventHandler;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void
+    {
+        // Message properties
+        $text = $message->message;           // Message text
+        $chatId = $message->chatId;          // Chat ID
+        $senderId = $message->senderId;      // Sender ID
+        $messageId = $message->id;           // Message ID
+        $date = $message->date;              // Unix timestamp
+        $replyToId = $message->replyToMsgId; // Reply to message ID
+        
+        $this->logger("Got message: $text from $senderId");
+    }
+}
+```
+
+## Sending Text Messages
+
+### Using the Reply Method
+
+The simplest way to respond to a message:
+
+```php
+use danog\MadelineProto\ParseMode;
+
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Simple reply
+    $message->reply("Hello!");
+    
+    // Reply with Markdown
+    $message->reply(
+        message: "**Bold** and *italic* text",
+        parseMode: ParseMode::MARKDOWN
+    );
+    
+    // Reply with HTML
+    $message->reply(
+        message: "<b>Bold</b> and <i>italic</i> text",
+        parseMode: ParseMode::HTML
+    );
+    
+    // Reply silently (no notification)
+    $message->reply(
+        message: "Silent message",
+        silent: true
+    );
+    
+    // Reply without webpage preview
+    $message->reply(
+        message: "Check https://example.com",
+        noWebpage: true
+    );
+}
+```
+
+### Using sendMessage Method
+
+Send messages to any chat:
+
+```php
+public function sendToUser(int $userId): void
+{
+    $this->sendMessage(
+        peer: $userId,
+        message: "Hello from MadelineProto!",
+        parseMode: ParseMode::TEXT
+    );
+}
+
+public function sendToChannel(): void
+{
+    $this->sendMessage(
+        peer: '@myChannel',
+        message: "New post in channel",
+        parseMode: ParseMode::MARKDOWN
+    );
+}
+```
+
+### Advanced Message Options
+
+```php
+$message->reply(
+    message: "Advanced message",
+    parseMode: ParseMode::MARKDOWN,
+    replyMarkup: $keyboard,              // Add keyboard
+    sendAs: '@myChannel',                // Send as specific peer
+    scheduleDate: time() + 3600,         // Schedule for 1 hour later
+    silent: true,                        // Silent message
+    noForwards: true,                    // Disable forwarding
+    background: false,                   // Don't send as background
+    clearDraft: true,                    // Clear draft
+    updateStickersetsOrder: false,       // Don't reorder stickersets
+    cancellation: $cancellation          // Cancellation token
+);
+```
+
+## Message Entities
+
+MadelineProto automatically parses message entities:
+
+```php
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Access parsed entities
+    foreach ($message->entities as $entity) {
+        // Entity types: Bold, Italic, Code, Pre, Url, Mention, etc.
+        $this->logger("Entity type: " . $entity::class);
+    }
+}
+```
+
+### Available Entity Types
+
+- `Bold` - **Bold text**
+- `Italic` - *Italic text*
+- `Code` - `Inline code`
+- `Pre` - Code blocks
+- `Url` - URLs
+- `Mention` - @username mentions
+- `Hashtag` - #hashtag
+- `BotCommand` - /command
+- `Email` - Email addresses
+- `Phone` - Phone numbers
+- `CustomEmoji` - Custom emojis
+
+## Editing Messages
+
+Edit sent messages:
+
+```php
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    $sent = $message->reply("Initial message");
+    
+    // Edit the sent message
+    $this->editMessage(
+        peer: $sent->chatId,
+        id: $sent->id,
+        message: "Edited message",
+        parseMode: ParseMode::TEXT
+    );
+}
+```
+
+## Deleting Messages
+
+Delete messages from chats:
+
+```php
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Delete this message
+    $message->delete(
+        revoke: true  // Delete for all participants
+    );
+    
+    // Delete specific messages
+    $this->deleteMessages(
+        peer: $message->chatId,
+        id: [1, 2, 3],  // Message IDs to delete
+        revoke: true
+    );
+}
+```
+
+## Replying to Messages
+
+Check and get replied-to messages:
+
+```php
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Check if message is a reply
+    if ($message->isReply()) {
+        // Get the replied-to message
+        $repliedTo = $message->getReply();
+        
+        if ($repliedTo) {
+            $message->reply("You replied to: " . $repliedTo->message);
+        }
+    }
+    
+    // Get reply of specific type
+    $repliedPhoto = $message->getReply(Message::class);
+}
+```
+
+## Forwarding Messages
+
+Forward messages between chats:
+
+```php
+public function forwardMessage(Message $message): void
+{
+    $this->forwardMessages(
+        from_peer: $message->chatId,
+        to_peer: '@myChannel',
+        id: [$message->id],
+        drop_author: false,  // Keep original author
+        drop_media_captions: false
+    );
+}
+```
+
+## Message Filters
+
+Use filters to handle specific messages:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Filter\FilterText;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+
+// Handle /start command
+#[FilterCommand('start')]
+public function startCommand(Message $message): void
+{
+    $message->reply("Welcome! Use /help for commands.");
+}
+
+// Handle specific text
+#[FilterText('hello')]
+public function helloText(Message $message): void
+{
+    $message->reply("Hi there!");
+}
+
+// Handle regex patterns
+#[FilterRegex('/.*(help|support).*/i')]
+public function helpRegex(Message $message): void
+{
+    $message->reply("How can I help you?");
+}
+
+// Only from admins
+#[FilterCommand('admin')]
+public function adminCommand(Message & FromAdmin $message): void
+{
+    $message->reply("Admin command executed.");
+}
+```
+
+## Command Handling
+
+MadelineProto automatically parses bot commands:
+
+```php
+#[FilterCommand('echo')]
+public function echoCommand(Message $message): void
+{
+    // Access command arguments
+    $args = $message->commandArgs;
+    
+    if (empty($args)) {
+        $message->reply("Usage: /echo <text>");
+        return;
+    }
+    
+    $message->reply($args[0]);
+}
+
+#[Handler]
+public function handleCommands(Incoming&Message $message): void
+{
+    if ($message->command) {
+        $this->logger("Command: {$message->command}");
+        $this->logger("Type: {$message->commandType->value}");
+        $this->logger("Args: " . implode(', ', $message->commandArgs ?? []));
+    }
+}
+```
+
+## Typing Indicators
+
+Show typing indicators:
+
+```php
+use danog\MadelineProto\EventHandler\Action\Typing;
+use danog\MadelineProto\EventHandler\Action\RecordVideo;
+use danog\MadelineProto\EventHandler\Action\UploadPhoto;
+
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Show "typing..." indicator
+    $message->setAction(new Typing);
+    
+    // Simulate processing
+    sleep(2);
+    
+    $message->reply("Processed!");
+}
+```
+
+## Reading Messages
+
+Mark messages as read:
+
+```php
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Mark this message as read
+    $message->read();
+    
+    // Mark all messages in chat as read
+    $message->read(readAll: true);
+}
+```
+
+## Message Properties
+
+All available message properties:
+
+```php
+#[Handler]
+public function handleMessage(Incoming&Message $message): void
+{
+    // Basic properties
+    $id = $message->id;                  // Message ID
+    $text = $message->message;           // Message text
+    $chatId = $message->chatId;          // Chat ID
+    $senderId = $message->senderId;      // Sender ID
+    $date = $message->date;              // Unix timestamp
+    
+    // Message flags
+    $isOut = $message->out;              // Is outgoing?
+    $isMentioned = $message->mentioned;  // Were we mentioned?
+    $isSilent = $message->silent;        // Is silent?
+    $isProtected = $message->protected;  // Is protected (no forward)?
+    $isScheduled = $message->scheduled;  // Is scheduled?
+    
+    // Reply information
+    $replyToId = $message->replyToMsgId; // Reply to message ID
+    $isReply = $message->isReply();      // Is a reply?
+    
+    // Thread/topic information
+    $topicId = $message->topicId;        // Forum topic ID
+    $threadId = $message->threadId;      // Thread ID
+    
+    // Media and extras
+    $media = $message->media;            // Attached media
+    $keyboard = $message->keyboard;      // Inline/reply keyboard
+    $entities = $message->entities;      // Message entities
+    
+    // Channel-specific
+    $views = $message->views;            // View count
+    $forwards = $message->forwards;      // Forward count
+    $signature = $message->signature;    // Post signature
+    
+    // Forward information
+    $fwdInfo = $message->fwdInfo;        // Forwarded info
+    
+    // Edit information
+    $editDate = $message->editDate;      // Last edit timestamp
+}
+```
+
+## Working with Channels
+
+```php
+use danog\MadelineProto\EventHandler\Message\ChannelMessage;
+
+#[Handler]
+public function handleChannelMessage(Incoming&ChannelMessage $message): void
+{
+    // Get discussion (comments)
+    $discussion = $message->getDiscussion();
+    
+    // Reply in discussion
+    if ($discussion) {
+        $discussion->reply("Interesting post!");
+    }
+    
+    // Access channel-specific properties
+    $views = $message->views;
+    $signature = $message->signature;
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Rate Limiting">
+    Always handle FLOOD_WAIT errors:
+    
+    ```php
+    try {
+        $message->reply("Response");
+    } catch (\danog\MadelineProto\RPCErrorException $e) {
+        if ($e->rpc === 'FLOOD_WAIT_X') {
+            // Wait and retry
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Parse Mode Selection">
+    Choose the right parse mode:
+    - `ParseMode::TEXT` - No formatting, safe for user input
+    - `ParseMode::MARKDOWN` - Markdown syntax
+    - `ParseMode::HTML` - HTML tags
+  </Accordion>
+  
+  <Accordion title="Message Validation">
+    Always validate message content:
+    
+    ```php
+    if (strlen($message->message) > 4096) {
+        $message->reply("Message too long!");
+        return;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>

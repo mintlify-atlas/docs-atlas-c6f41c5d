@@ -1,0 +1,430 @@
+---
+title: Inline Query Events
+description: Handle inline queries from users
+---
+
+# Inline Query Events
+
+Inline queries allow users to interact with your bot directly from any chat by typing `@your_bot` followed by a query.
+
+## InlineQuery Class
+
+Represents an incoming inline query from a user.
+
+### Properties
+
+<ResponseField name="queryId" type="int">
+  Unique query identifier
+</ResponseField>
+
+<ResponseField name="query" type="string">
+  Text of the query
+</ResponseField>
+
+<ResponseField name="userId" type="int">
+  ID of the user who sent the query
+</ResponseField>
+
+<ResponseField name="offset" type="string">
+  Offset for pagination through results
+</ResponseField>
+
+<ResponseField name="geo" type="GeoPoint|null">
+  Attached geolocation (if user shared location)
+</ResponseField>
+
+<ResponseField name="peerType" type="InlineQueryPeerType">
+  Type of chat from which the inline query was sent
+</ResponseField>
+
+<ResponseField name="matches" type="array<string>|null">
+  Regex matches if a filter regex is present
+</ResponseField>
+
+<ResponseField name="matchesAll" type="array|null">
+  All regex matches if a filter multiple match regex is present
+</ResponseField>
+
+## Handling Inline Queries
+
+### Basic Handler
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\InlineQuery;
+
+class MyBot extends EventHandler
+{
+    public function onUpdateBotInlineQuery(InlineQuery $query): void
+    {
+        $text = $query->query;
+        $this->logger("Inline query from {$query->userId}: $text");
+        
+        // Answer the query
+        $this->messages->setInlineBotResults([
+            'query_id' => $query->queryId,
+            'results' => [
+                [
+                    '_' => 'inputBotInlineResult',
+                    'id' => '1',
+                    'type' => 'article',
+                    'title' => 'Result 1',
+                    'description' => 'First result',
+                    'send_message' => [
+                        '_' => 'inputBotInlineMessageText',
+                        'message' => "You searched for: $text",
+                    ],
+                ],
+            ],
+        ]);
+    }
+}
+```
+
+### With SimpleEventHandler
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\InlineQuery;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleInline(InlineQuery $query): void
+    {
+        $this->logger("Query: {$query->query}");
+    }
+}
+```
+
+## Answering Inline Queries
+
+### Article Results
+
+Send text-based results:
+
+```php
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    $results = [];
+    
+    // Create article results
+    for ($i = 1; $i <= 5; $i++) {
+        $results[] = [
+            '_' => 'inputBotInlineResult',
+            'id' => (string)$i,
+            'type' => 'article',
+            'title' => "Result $i",
+            'description' => "Description for result $i",
+            'send_message' => [
+                '_' => 'inputBotInlineMessageText',
+                'message' => "You selected result $i",
+            ],
+        ];
+    }
+    
+    $this->messages->setInlineBotResults([
+        'query_id' => $query->queryId,
+        'results' => $results,
+        'cache_time' => 300, // Cache for 5 minutes
+    ]);
+}
+```
+
+### Photo Results
+
+Send photo results:
+
+```php
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    $results = [
+        [
+            '_' => 'inputBotInlineResult',
+            'id' => '1',
+            'type' => 'photo',
+            'photo' => [
+                '_' => 'inputWebDocument',
+                'url' => 'https://example.com/photo.jpg',
+                'size' => 0,
+                'mime_type' => 'image/jpeg',
+                'attributes' => [],
+            ],
+            'send_message' => [
+                '_' => 'inputBotInlineMessageMediaAuto',
+                'message' => 'Photo caption',
+            ],
+        ],
+    ];
+    
+    $this->messages->setInlineBotResults([
+        'query_id' => $query->queryId,
+        'results' => $results,
+    ]);
+}
+```
+
+### GIF/Video Results
+
+```php
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    $results = [
+        [
+            '_' => 'inputBotInlineResult',
+            'id' => '1',
+            'type' => 'gif',
+            'document' => [
+                '_' => 'inputWebDocument',
+                'url' => 'https://example.com/animation.gif',
+                'size' => 0,
+                'mime_type' => 'image/gif',
+                'attributes' => [],
+            ],
+            'send_message' => [
+                '_' => 'inputBotInlineMessageMediaAuto',
+                'message' => '',
+            ],
+        ],
+    ];
+    
+    $this->messages->setInlineBotResults([
+        'query_id' => $query->queryId,
+        'results' => $results,
+    ]);
+}
+```
+
+## Using Location
+
+Check if user shared location:
+
+```php
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    if ($query->geo !== null) {
+        $lat = $query->geo->lat;
+        $long = $query->geo->long;
+        
+        $this->logger("User location: $lat, $long");
+        
+        // Provide location-based results
+        $results = [
+            [
+                '_' => 'inputBotInlineResult',
+                'id' => '1',
+                'type' => 'article',
+                'title' => 'Nearby Result',
+                'description' => "Located at $lat, $long",
+                'send_message' => [
+                    '_' => 'inputBotInlineMessageText',
+                    'message' => "Your location: $lat, $long",
+                ],
+            ],
+        ];
+        
+        $this->messages->setInlineBotResults([
+            'query_id' => $query->queryId,
+            'results' => $results,
+        ]);
+    } else {
+        $this->logger("No location provided");
+    }
+}
+```
+
+## Peer Type Filtering
+
+The `peerType` property indicates where the query came from:
+
+```php
+use danog\MadelineProto\EventHandler\InlineQueryPeerType;
+
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    match ($query->peerType) {
+        InlineQueryPeerType::BOT_PM => 
+            $this->logger("Query from bot PM"),
+        InlineQueryPeerType::PM => 
+            $this->logger("Query from private message"),
+        InlineQueryPeerType::CHAT => 
+            $this->logger("Query from group chat"),
+        InlineQueryPeerType::MEGAGROUP => 
+            $this->logger("Query from supergroup"),
+        InlineQueryPeerType::BROADCAST => 
+            $this->logger("Query from channel"),
+        default => 
+            $this->logger("Unknown peer type"),
+    };
+}
+```
+
+## Pagination
+
+Handle pagination with the offset parameter:
+
+```php
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    $offset = (int)($query->offset ?: 0);
+    $limit = 50;
+    
+    // Get results from database or API
+    $totalResults = 200; // Example total
+    $results = $this->getResults($offset, $limit);
+    
+    $nextOffset = $offset + $limit < $totalResults 
+        ? (string)($offset + $limit) 
+        : '';
+    
+    $this->messages->setInlineBotResults([
+        'query_id' => $query->queryId,
+        'results' => $results,
+        'next_offset' => $nextOffset,
+        'cache_time' => 0, // Don't cache paginated results
+    ]);
+}
+```
+
+## Regex Filtering
+
+Use regex filters with SimpleEventHandler:
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\InlineQuery;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+
+class MyBot extends SimpleEventHandler
+{
+    #[FilterRegex('/^search (.+)/')]
+    public function handleSearch(InlineQuery $query): void
+    {
+        $searchTerm = $query->matches[1];
+        $this->logger("Searching for: $searchTerm");
+        
+        // Perform search and return results
+    }
+    
+    #[FilterRegex('/^image (.+)/')]
+    public function handleImageSearch(InlineQuery $query): void
+    {
+        $imageTerm = $query->matches[1];
+        // Return image results
+    }
+}
+```
+
+## Switch PM Button
+
+Add a button to switch to private chat:
+
+```php
+public function onUpdateBotInlineQuery(InlineQuery $query): void
+{
+    $this->messages->setInlineBotResults([
+        'query_id' => $query->queryId,
+        'results' => $results,
+        'switch_pm' => [
+            'text' => 'Start bot in PM',
+            'start_param' => 'from_inline',
+        ],
+    ]);
+}
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\InlineQuery;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+
+class InlineBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleInlineQuery(InlineQuery $query): void
+    {
+        $text = $query->query;
+        
+        if (empty($text)) {
+            // Show default results
+            $results = $this->getDefaultResults();
+        } else {
+            // Show search results
+            $results = $this->searchResults($text);
+        }
+        
+        $this->messages->setInlineBotResults([
+            'query_id' => $query->queryId,
+            'results' => $results,
+            'cache_time' => 300,
+            'switch_pm' => [
+                'text' => 'Help',
+                'start_param' => 'help',
+            ],
+        ]);
+    }
+    
+    private function getDefaultResults(): array
+    {
+        return [
+            [
+                '_' => 'inputBotInlineResult',
+                'id' => '1',
+                'type' => 'article',
+                'title' => 'How to use',
+                'description' => 'Type to search',
+                'send_message' => [
+                    '_' => 'inputBotInlineMessageText',
+                    'message' => 'Start typing to search!',
+                ],
+            ],
+        ];
+    }
+    
+    private function searchResults(string $query): array
+    {
+        $results = [];
+        
+        // Example: Create results based on query
+        for ($i = 1; $i <= 5; $i++) {
+            $results[] = [
+                '_' => 'inputBotInlineResult',
+                'id' => (string)$i,
+                'type' => 'article',
+                'title' => "Result $i for \"$query\"",
+                'description' => "Click to send result $i",
+                'send_message' => [
+                    '_' => 'inputBotInlineMessageText',
+                    'message' => "You searched for: $query\nResult: $i",
+                ],
+            ];
+        }
+        
+        return $results;
+    }
+}
+
+InlineBot::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+## Bot Configuration
+
+Enable inline mode for your bot via @BotFather:
+
+1. Send `/setinline` to @BotFather
+2. Select your bot
+3. Enter a placeholder text (e.g., "Search...")
+
+Optionally:
+- `/setinlinegeo` - Enable location requests
+- `/setinlinefeedback` - Enable feedback (chosen result info)
+
+## See Also
+
+- [Callback Query Events](/api/events/callback-query) - Handle button callbacks
+- [Message Events](/api/events/messages) - Handle regular messages
+- [SimpleEventHandler](/api/simple-event-handler) - Using filters

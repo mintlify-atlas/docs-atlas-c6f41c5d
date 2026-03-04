@@ -1,0 +1,461 @@
+---
+title: Callback Query Events
+description: Handle button callbacks from inline keyboards
+---
+
+# Callback Query Events
+
+Callback queries are sent when users click buttons on inline keyboards attached to messages.
+
+## CallbackQuery Class
+
+Represents a query sent by clicking an inline keyboard button.
+
+### Properties
+
+<ResponseField name="queryId" type="int">
+  Unique query identifier
+</ResponseField>
+
+<ResponseField name="userId" type="int">
+  ID of the user who pressed the button
+</ResponseField>
+
+<ResponseField name="chatInstance" type="int">
+  Global identifier corresponding to the chat. Useful for high scores in games
+</ResponseField>
+
+## Handling Callback Queries
+
+### Basic Handler
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\CallbackQuery;
+
+class MyBot extends EventHandler
+{
+    public function onUpdateBotCallbackQuery(CallbackQuery $query): void
+    {
+        $this->logger("Callback from user {$query->userId}");
+        
+        // Answer the callback
+        $query->answer("Button clicked!");
+    }
+}
+```
+
+### With SimpleEventHandler
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\CallbackQuery;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleCallback(CallbackQuery $query): void
+    {
+        $query->answer("Processing...");
+    }
+}
+```
+
+## CallbackQuery Methods
+
+### answer
+
+Answer the callback query. This removes the loading state on the button.
+
+<ParamField path="message" type="string|null">
+  Text to show to the user
+</ParamField>
+
+<ParamField path="alert" type="bool" default="false">
+  Show as popup alert instead of toast notification
+</ParamField>
+
+<ParamField path="url" type="string|null">
+  URL to open
+</ParamField>
+
+<ParamField path="cacheTime" type="int" default="300">
+  Cache validity in seconds (default 5 minutes)
+</ParamField>
+
+<ResponseField name="return" type="bool">
+  Success status
+</ResponseField>
+
+```php
+// Simple toast notification
+$query->answer("Action completed!");
+
+// Alert popup
+$query->answer("Are you sure?", alert: true);
+
+// Open URL
+$query->answer(url: "https://example.com");
+
+// Custom cache time
+$query->answer("Cached response", cacheTime: 60);
+```
+
+## Creating Inline Keyboards
+
+### Basic Keyboard
+
+Create a message with inline keyboard:
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->message === '/start') {
+        $message->reply(
+            "Choose an option:",
+            replyMarkup: [
+                'inline_keyboard' => [
+                    [
+                        ['text' => 'Option 1', 'callback_data' => 'opt1'],
+                        ['text' => 'Option 2', 'callback_data' => 'opt2'],
+                    ],
+                    [
+                        ['text' => 'Option 3', 'callback_data' => 'opt3'],
+                    ],
+                ],
+            ]
+        );
+    }
+}
+```
+
+### URL Buttons
+
+```php
+$message->reply(
+    "External links:",
+    replyMarkup: [
+        'inline_keyboard' => [
+            [
+                ['text' => 'Website', 'url' => 'https://example.com'],
+                ['text' => 'Telegram', 'url' => 'https://t.me/username'],
+            ],
+        ],
+    ]
+);
+```
+
+### Switch Inline Buttons
+
+```php
+$message->reply(
+    "Use inline mode:",
+    replyMarkup: [
+        'inline_keyboard' => [
+            [
+                ['text' => 'Search', 'switch_inline_query' => 'search '],
+                ['text' => 'Share', 'switch_inline_query_current_chat' => ''],
+            ],
+        ],
+    ]
+);
+```
+
+## Handling Callback Data
+
+Callback queries from message buttons:
+
+```php
+use danog\MadelineProto\EventHandler\Query\ButtonQuery;
+
+public function onUpdateBotCallbackQuery(ButtonQuery $query): void
+{
+    $data = $query->data; // The callback_data value
+    
+    match ($data) {
+        'opt1' => $this->handleOption1($query),
+        'opt2' => $this->handleOption2($query),
+        'opt3' => $this->handleOption3($query),
+        default => $query->answer("Unknown option"),
+    };
+}
+
+private function handleOption1(ButtonQuery $query): void
+{
+    $query->answer("You selected Option 1", alert: true);
+    
+    // Edit the message
+    $query->editText("Option 1 selected!");
+}
+```
+
+## Editing Messages
+
+Edit the message that contains the button:
+
+```php
+use danog\MadelineProto\EventHandler\Query\ButtonQuery;
+
+public function onUpdateBotCallbackQuery(ButtonQuery $query): void
+{
+    $data = $query->data;
+    
+    if ($data === 'delete') {
+        $query->delete();
+        $query->answer("Message deleted");
+    } elseif ($data === 'edit') {
+        $query->editText(
+            "Message updated!",
+            replyMarkup: [
+                'inline_keyboard' => [
+                    [['text' => 'Back', 'callback_data' => 'back']],
+                ],
+            ]
+        );
+        $query->answer("Updated");
+    }
+}
+```
+
+## Dynamic Keyboards
+
+Create keyboards based on user actions:
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Query\ButtonQuery;
+
+private array $counters = [];
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->message === '/counter') {
+        $userId = $message->senderId;
+        $this->counters[$userId] = 0;
+        
+        $message->reply(
+            "Counter: 0",
+            replyMarkup: $this->getCounterKeyboard()
+        );
+    }
+}
+
+public function onUpdateBotCallbackQuery(ButtonQuery $query): void
+{
+    $userId = $query->userId;
+    
+    match ($query->data) {
+        'inc' => {
+            $this->counters[$userId] = ($this->counters[$userId] ?? 0) + 1;
+            $count = $this->counters[$userId];
+            
+            $query->editText(
+                "Counter: $count",
+                replyMarkup: $this->getCounterKeyboard()
+            );
+            $query->answer("Incremented to $count");
+        },
+        'dec' => {
+            $this->counters[$userId] = ($this->counters[$userId] ?? 0) - 1;
+            $count = $this->counters[$userId];
+            
+            $query->editText(
+                "Counter: $count",
+                replyMarkup: $this->getCounterKeyboard()
+            );
+            $query->answer("Decremented to $count");
+        },
+        'reset' => {
+            $this->counters[$userId] = 0;
+            
+            $query->editText(
+                "Counter: 0",
+                replyMarkup: $this->getCounterKeyboard()
+            );
+            $query->answer("Reset to 0");
+        },
+    };
+}
+
+private function getCounterKeyboard(): array
+{
+    return [
+        'inline_keyboard' => [
+            [
+                ['text' => '➖', 'callback_data' => 'dec'],
+                ['text' => 'Reset', 'callback_data' => 'reset'],
+                ['text' => '➕', 'callback_data' => 'inc'],
+            ],
+        ],
+    ];
+}
+```
+
+## Callback Query Types
+
+MadelineProto provides specific callback query types:
+
+### ButtonQuery
+
+From inline keyboard buttons on messages:
+
+```php
+use danog\MadelineProto\EventHandler\Query\ButtonQuery;
+
+public function onUpdateBotCallbackQuery(ButtonQuery $query): void
+{
+    // Has additional properties like chatId, messageId, data
+    $this->logger("Button in chat {$query->chatId}");
+}
+```
+
+### GameQuery
+
+From game buttons:
+
+```php
+use danog\MadelineProto\EventHandler\Query\GameQuery;
+
+public function onUpdateBotCallbackQuery(GameQuery $query): void
+{
+    // Handle game callback
+    $query->answer("Game started!");
+}
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\{Message, CallbackQuery};
+use danog\MadelineProto\EventHandler\Query\ButtonQuery;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+
+class MenuBot extends SimpleEventHandler
+{
+    #[FilterRegex('/^\/start/')]
+    public function handleStart(Message $message): void
+    {
+        $message->reply(
+            "Welcome! Choose a category:",
+            replyMarkup: $this->getMainMenu()
+        );
+    }
+    
+    #[Handler]
+    public function handleCallback(ButtonQuery $query): void
+    {
+        [$action, $param] = explode(':', $query->data . ':');
+        
+        match ($action) {
+            'menu' => $this->showMenu($query, $param),
+            'item' => $this->showItem($query, $param),
+            'back' => $this->showMainMenu($query),
+            default => $query->answer("Unknown action"),
+        };
+    }
+    
+    private function getMainMenu(): array
+    {
+        return [
+            'inline_keyboard' => [
+                [
+                    ['text' => '📱 Electronics', 'callback_data' => 'menu:electronics'],
+                    ['text' => '👕 Clothing', 'callback_data' => 'menu:clothing'],
+                ],
+                [
+                    ['text' => '📚 Books', 'callback_data' => 'menu:books'],
+                    ['text' => '🎮 Games', 'callback_data' => 'menu:games'],
+                ],
+            ],
+        ];
+    }
+    
+    private function showMenu(ButtonQuery $query, string $category): void
+    {
+        $items = $this->getItemsForCategory($category);
+        
+        $keyboard = [];
+        foreach ($items as $id => $name) {
+            $keyboard[] = [[
+                'text' => $name,
+                'callback_data' => "item:$id"
+            ]];
+        }
+        $keyboard[] = [['text' => '« Back', 'callback_data' => 'back']];
+        
+        $query->editText(
+            "Category: " . ucfirst($category),
+            replyMarkup: ['inline_keyboard' => $keyboard]
+        );
+        $query->answer();
+    }
+    
+    private function showItem(ButtonQuery $query, string $itemId): void
+    {
+        $itemName = $this->getItemName($itemId);
+        
+        $query->editText(
+            "Item: $itemName\n\nPrice: $10.00",
+            replyMarkup: [
+                'inline_keyboard' => [
+                    [['text' => '🛒 Add to Cart', 'callback_data' => "cart:$itemId"]],
+                    [['text' => '« Back', 'callback_data' => 'back']],
+                ],
+            ]
+        );
+        $query->answer();
+    }
+    
+    private function showMainMenu(ButtonQuery $query): void
+    {
+        $query->editText(
+            "Welcome! Choose a category:",
+            replyMarkup: $this->getMainMenu()
+        );
+        $query->answer();
+    }
+    
+    private function getItemsForCategory(string $category): array
+    {
+        return match ($category) {
+            'electronics' => ['phone' => '📱 Phone', 'laptop' => '💻 Laptop'],
+            'clothing' => ['shirt' => '👕 Shirt', 'pants' => '👖 Pants'],
+            'books' => ['novel' => '📕 Novel', 'textbook' => '📗 Textbook'],
+            'games' => ['puzzle' => '🧩 Puzzle', 'board' => '🎲 Board Game'],
+            default => [],
+        };
+    }
+    
+    private function getItemName(string $itemId): string
+    {
+        $items = [
+            'phone' => 'Smartphone',
+            'laptop' => 'Laptop Computer',
+            'shirt' => 'T-Shirt',
+            'pants' => 'Jeans',
+        ];
+        return $items[$itemId] ?? 'Unknown';
+    }
+}
+
+MenuBot::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+## Best Practices
+
+1. **Always answer callbacks**: Call `answer()` to remove loading state
+2. **Use meaningful data**: Make callback_data descriptive
+3. **Handle errors**: Catch exceptions when editing messages
+4. **Cache responses**: Use appropriate cacheTime values
+5. **Provide feedback**: Show alerts or toasts for user actions
+
+## See Also
+
+- [Message Events](/api/events/messages) - Handle messages with keyboards
+- [Inline Query Events](/api/events/inline-query) - Handle inline queries
+- [SimpleEventHandler](/api/simple-event-handler) - Using filters

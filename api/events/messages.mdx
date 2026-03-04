@@ -1,0 +1,453 @@
+---
+title: Message Events
+description: Handle incoming and outgoing message updates
+---
+
+# Message Events
+
+Message events represent incoming or outgoing messages in chats, channels, and private conversations.
+
+## Message Class
+
+The `Message` class represents a Telegram message with all its properties and methods.
+
+### Properties
+
+<ResponseField name="message" type="string">
+  Content of the message
+</ResponseField>
+
+<ResponseField name="command" type="string|null">
+  Bot command if present (e.g., "start" from "/start")
+</ResponseField>
+
+<ResponseField name="commandType" type="CommandType|null">
+  Type of bot command
+</ResponseField>
+
+<ResponseField name="commandArgs" type="array<string>|null">
+  Bot command arguments if present
+</ResponseField>
+
+<ResponseField name="protected" type="bool">
+  Whether this message is protected from forwarding
+</ResponseField>
+
+<ResponseField name="matches" type="array<string>|null">
+  Regex matches if a filter regex is present
+</ResponseField>
+
+<ResponseField name="matchesAll" type="array|null">
+  All regex matches if a filter multiple match regex is present
+</ResponseField>
+
+<ResponseField name="media" type="Media|null">
+  Attached media (Audio, Document, Photo, Video, Voice, Sticker, etc.)
+</ResponseField>
+
+<ResponseField name="fromScheduled" type="bool">
+  Whether this is a sent scheduled message
+</ResponseField>
+
+<ResponseField name="viaBotId" type="int|null">
+  ID of the bot that generated the message (for inline queries)
+</ResponseField>
+
+<ResponseField name="editDate" type="int|null">
+  Last edit date of the message (Unix timestamp)
+</ResponseField>
+
+<ResponseField name="editHide" type="bool">
+  Whether the edit is hidden (non-content changes like reactions)
+</ResponseField>
+
+<ResponseField name="keyboard" type="InlineKeyboard|ReplyKeyboard|null">
+  Inline or reply keyboard attached to the message
+</ResponseField>
+
+<ResponseField name="imported" type="bool">
+  Whether message was imported from a foreign chat service
+</ResponseField>
+
+<ResponseField name="psaType" type="string|null">
+  For Public Service Announcement messages, the PSA type
+</ResponseField>
+
+<ResponseField name="views" type="int|null">
+  View counter for channel messages
+</ResponseField>
+
+<ResponseField name="forwards" type="int|null">
+  Forward counter for channel messages
+</ResponseField>
+
+<ResponseField name="signature" type="string|null">
+  Author signature if enabled for channel messages
+</ResponseField>
+
+<ResponseField name="entities" type="array<MessageEntity>">
+  Message entities for styled text (bold, italic, links, etc.)
+</ResponseField>
+
+<ResponseField name="groupedId" type="int|null">
+  Group ID for albums (all messages in same album have identical ID)
+</ResponseField>
+
+<ResponseField name="poll" type="AbstractPoll|null">
+  The poll attached to the message
+</ResponseField>
+
+<ResponseField name="fwdInfo" type="ForwardedInfo|null">
+  Information about forwarded message
+</ResponseField>
+
+<ResponseField name="reactions" type="array<int|string>">
+  List of our message reactions
+</ResponseField>
+
+<ResponseField name="scheduled" type="bool">
+  Whether this is a scheduled message
+</ResponseField>
+
+## Handling Messages
+
+### Basic Handler
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\Message;
+
+class MyBot extends EventHandler
+{
+    public function onUpdateNewMessage(Message $message): void
+    {
+        $text = $message->message;
+        $this->logger("Received: $text");
+    }
+}
+```
+
+### With SimpleEventHandler and Filters
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    #[Incoming]
+    public function handleIncoming(Message $message): void
+    {
+        // Only processes incoming messages
+        $this->logger("Incoming: {$message->message}");
+    }
+}
+```
+
+## Message Methods
+
+### reply
+
+Reply to the message.
+
+<ParamField path="message" type="string" required>
+  The message text to send
+</ParamField>
+
+<ParamField path="parseMode" type="ParseMode">
+  Parse mode for formatting (Markdown, HTML, etc.)
+</ParamField>
+
+<ParamField path="replyMarkup" type="array">
+  Keyboard markup
+</ParamField>
+
+<ParamField path="noWebpage" type="bool" default="false">
+  Disable link previews
+</ParamField>
+
+<ParamField path="scheduleDate" type="int">
+  Schedule message for future sending (Unix timestamp)
+</ParamField>
+
+<ParamField path="silent" type="bool" default="false">
+  Send silently (no notification)
+</ParamField>
+
+```php
+$message->reply("Hello! You said: {$message->message}");
+
+// With formatting
+$message->reply(
+    "**Bold** and _italic_ text",
+    parseMode: ParseMode::MARKDOWN
+);
+
+// With keyboard
+$message->reply("Choose an option:", replyMarkup: [
+    'inline_keyboard' => [[
+        ['text' => 'Option 1', 'callback_data' => 'opt1'],
+        ['text' => 'Option 2', 'callback_data' => 'opt2'],
+    ]]
+]);
+```
+
+### delete
+
+Delete the message.
+
+<ParamField path="revoke" type="bool" default="true">
+  Whether to delete for all users (requires permissions)
+</ParamField>
+
+```php
+$message->delete();
+```
+
+### edit
+
+Edit the message text.
+
+<ParamField path="message" type="string" required>
+  New message text
+</ParamField>
+
+<ParamField path="parseMode" type="ParseMode">
+  Parse mode for formatting
+</ParamField>
+
+<ParamField path="replyMarkup" type="array">
+  New keyboard markup
+</ParamField>
+
+```php
+$message->edit("Updated message text");
+```
+
+### forward
+
+Forward the message to another chat.
+
+<ParamField path="peer" type="string|int" required>
+  Destination chat (username or ID)
+</ParamField>
+
+<ParamField path="silent" type="bool" default="false">
+  Send silently
+</ParamField>
+
+```php
+$message->forward('@channel');
+$message->forward(123456789);
+```
+
+### pin
+
+Pin the message in the chat.
+
+<ParamField path="pmOneSide" type="bool" default="false">
+  Whether to pin only for yourself in PM
+</ParamField>
+
+<ParamField path="silent" type="bool" default="false">
+  Pin silently (no notification)
+</ParamField>
+
+```php
+$message->pin();
+```
+
+### unpin
+
+Unpin the message.
+
+```php
+$message->unpin();
+```
+
+## Command Handling
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->command === 'start') {
+        $message->reply("Welcome!");
+    }
+    
+    if ($message->command === 'echo' && $message->commandArgs) {
+        $text = implode(' ', $message->commandArgs);
+        $message->reply($text);
+    }
+}
+```
+
+## Media Handling
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Media\Photo;
+use danog\MadelineProto\EventHandler\Media\Document;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->media instanceof Photo) {
+        $this->logger("Received a photo");
+        // Download the photo
+        $info = $message->media->download();
+    }
+    
+    if ($message->media instanceof Document) {
+        $this->logger("Received a document: {$message->media->fileName}");
+    }
+}
+```
+
+## Regex Matching
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+
+class MyBot extends SimpleEventHandler
+{
+    #[FilterRegex('/\/echo (.+)/')]
+    public function onEcho(Message $message): void
+    {
+        $text = $message->matches[1];
+        $message->reply($text);
+    }
+    
+    #[FilterRegex('/hello|hi/i')]
+    public function onGreeting(Message $message): void
+    {
+        $message->reply("Hello there!");
+    }
+}
+```
+
+## Entity Processing
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    foreach ($message->entities as $entity) {
+        if ($entity->type === 'url') {
+            $url = substr($message->message, $entity->offset, $entity->length);
+            $this->logger("Found URL: $url");
+        }
+    }
+}
+```
+
+## Update Types
+
+### New Messages
+
+```php
+public function onUpdateNewMessage(Message $message): void
+{
+    // Handle new messages in private chats and groups
+}
+```
+
+### New Channel Messages
+
+```php
+public function onUpdateNewChannelMessage(Message $message): void
+{
+    // Handle new messages in channels
+}
+```
+
+### Edited Messages
+
+```php
+public function onUpdateEditMessage(Message $message): void
+{
+    // Handle edited messages
+    $this->logger("Message edited at: {$message->editDate}");
+}
+```
+
+### Edited Channel Messages
+
+```php
+public function onUpdateEditChannelMessage(Message $message): void
+{
+    // Handle edited channel messages
+}
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\SimpleFilter\{Incoming, HasMedia};
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+use danog\MadelineProto\ParseMode;
+
+class EchoBot extends SimpleEventHandler
+{
+    #[FilterRegex('/^\/start/')]
+    #[Incoming]
+    public function handleStart(Message $message): void
+    {
+        $message->reply(
+            "**Welcome to Echo Bot!**\n\n" .
+            "Commands:\n" .
+            "/echo <text> - Echo your message\n" .
+            "/info - Get message info",
+            parseMode: ParseMode::MARKDOWN
+        );
+    }
+    
+    #[FilterRegex('/^\/echo (.+)/')]
+    public function handleEcho(Message $message): void
+    {
+        $text = $message->matches[1];
+        $message->reply($text);
+    }
+    
+    #[FilterRegex('/^\/info/')]
+    public function handleInfo(Message $message): void
+    {
+        $info = [
+            "Message ID: {$message->id}",
+            "From: {$message->senderId}",
+            "Date: " . date('Y-m-d H:i:s', $message->date),
+        ];
+        
+        if ($message->editDate) {
+            $info[] = "Edited: " . date('Y-m-d H:i:s', $message->editDate);
+        }
+        
+        $message->reply(implode("\n", $info));
+    }
+    
+    #[Handler]
+    #[HasMedia]
+    public function handleMedia(Message $message): void
+    {
+        $type = get_class($message->media);
+        $message->reply("Received media: " . basename($type));
+    }
+}
+
+EchoBot::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+## See Also
+
+- [SimpleEventHandler](/api/simple-event-handler) - For using filters
+- [Updates](/api/events/updates) - Other update types
+- [Inline Queries](/api/events/inline-query) - Handle inline queries

@@ -1,0 +1,375 @@
+---
+title: Flood Wait Handling
+description: Learn how to handle Telegram's rate limiting (FLOOD_WAIT) errors in MadelineProto
+---
+
+## Overview
+
+Telegram enforces rate limits to prevent spam and abuse. When you exceed these limits, Telegram returns a `FLOOD_WAIT_X` error, where X is the number of seconds you must wait before retrying.
+
+MadelineProto provides automatic and manual handling for these rate limit errors.
+
+## Understanding Flood Wait
+
+### What Triggers Rate Limits?
+
+Common scenarios:
+- Sending too many messages in a short period
+- Adding too many users to groups
+- Creating too many groups/channels
+- Making too many API calls to the same method
+- Uploading large files repeatedly
+
+### Rate Limit Types
+
+**FloodWaitError** - Standard rate limiting:
+```php
+FLOOD_WAIT_42  // Wait 42 seconds before retrying
+```
+
+**FloodPremiumWaitError** - Premium users have higher limits:
+```php
+FLOOD_PREMIUM_WAIT_30  // Premium feature rate limit
+```
+
+## Automatic Handling
+
+By default, MadelineProto **automatically waits** when encountering short flood waits.
+
+### Default Behavior
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\RPC;
+
+$settings = new Settings;
+$rpc = $settings->getRpc();
+
+// Default: Wait if FLOOD_WAIT is less than 30 seconds
+echo "Flood timeout: " . $rpc->getFloodTimeout(); // 30
+```
+
+MadelineProto will:
+- **Wait automatically** if flood wait time ≤ 30 seconds (default)
+- **Throw exception** if flood wait time > 30 seconds
+
+### Configure Flood Timeout
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\RPC;
+
+$settings = new Settings;
+$settings->getRpc()->setFloodTimeout(60); // Wait up to 60 seconds
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+<Warning>
+The minimum flood timeout is **5 seconds**. Values below 5 will be automatically adjusted to 5.
+</Warning>
+
+Source: `/home/daytona/workspace/source/src/Settings/RPC.php:85-105`
+
+## Manual Handling
+
+### Catching FloodWaitError
+
+```php
+use danog\MadelineProto\RPCError\FloodWaitError;
+
+try {
+    $MadelineProto->messages->sendMessage([
+        'peer' => $peer,
+        'message' => $text,
+    ]);
+} catch (FloodWaitError $e) {
+    $waitTime = $e->getWaitTime();
+    echo "Rate limited! Must wait {$waitTime} seconds\n";
+    
+    // Option 1: Wait automatically
+    $e->wait();
+    
+    // Retry the operation
+    $MadelineProto->messages->sendMessage([
+        'peer' => $peer,
+        'message' => $text,
+    ]);
+}
+```
+
+### FloodWaitError Methods
+
+```php
+use danog\MadelineProto\RPCError\FloodWaitError;
+
+try {
+    // Some rate-limited operation
+    $MadelineProto->channels->createChannel([...]);
+} catch (FloodWaitError $e) {
+    // Get total wait time in seconds
+    $totalWait = $e->getWaitTime();
+    echo "Must wait: {$totalWait} seconds\n";
+    
+    // Get remaining wait time (decreases over time)
+    $remaining = $e->getWaitTimeLeft();
+    echo "Remaining: {$remaining} seconds\n";
+    
+    // Get absolute expiration timestamp
+    $expiresAt = $e->expires;
+    echo "Can retry at: " . date('Y-m-d H:i:s', $expiresAt) . "\n";
+    
+    // Wait with optional cancellation
+    $e->wait($cancellation);
+}
+```
+
+Source: `/home/daytona/workspace/source/src/RPCError/RateLimitError.php:30-82`
+
+## Per-Method Flood Wait Limit
+
+You can override the global flood timeout for specific method calls:
+
+```php
+// Wait up to 86400 seconds (24 hours) for this specific call
+$result = $MadelineProto->messages->sendMessage([
+    'peer' => $peer,
+    'message' => $text,
+    'floodWaitLimit' => 86400,
+]);
+
+// Don't wait at all - throw exception immediately
+$result = $MadelineProto->messages->sendMessage([
+    'peer' => $peer,
+    'message' => $text,
+    'floodWaitLimit' => 0,
+]);
+```
+
+<Note>
+The `floodWaitLimit` parameter is available on all API methods. If the FLOOD_WAIT time exceeds this limit, a `FloodWaitError` exception is thrown instead of waiting.
+</Note>
+
+## Advanced Strategies
+
+### Queue System
+
+Implement a queue to handle rate limits gracefully:
+
+```php
+use danog\MadelineProto\RPCError\FloodWaitError;
+
+class MessageQueue {
+    private $queue = [];
+    private $MadelineProto;
+    
+    public function __construct($MadelineProto) {
+        $this->MadelineProto = $MadelineProto;
+    }
+    
+    public function addMessage($peer, $message) {
+        $this->queue[] = ['peer' => $peer, 'message' => $message];
+    }
+    
+    public function process() {
+        while ($item = array_shift($this->queue)) {
+            try {
+                $this->MadelineProto->messages->sendMessage([
+                    'peer' => $item['peer'],
+                    'message' => $item['message'],
+                ]);
+                
+                // Add small delay between messages
+                usleep(100000); // 100ms
+                
+            } catch (FloodWaitError $e) {
+                // Put message back in queue
+                array_unshift($this->queue, $item);
+                
+                // Wait and retry
+                echo "Rate limited, waiting {$e->getWaitTime()}s\n";
+                $e->wait();
+            }
+        }
+    }
+}
+
+// Usage
+$queue = new MessageQueue($MadelineProto);
+$queue->addMessage('@user1', 'Hello');
+$queue->addMessage('@user2', 'Hi there');
+$queue->process();
+```
+
+### Exponential Backoff
+
+```php
+use danog\MadelineProto\RPCError\FloodWaitError;
+
+function sendWithBackoff($MadelineProto, $peer, $message, $maxRetries = 3) {
+    $attempt = 0;
+    
+    while ($attempt < $maxRetries) {
+        try {
+            return $MadelineProto->messages->sendMessage([
+                'peer' => $peer,
+                'message' => $message,
+            ]);
+        } catch (FloodWaitError $e) {
+            $attempt++;
+            if ($attempt >= $maxRetries) {
+                throw $e; // Give up
+            }
+            
+            $waitTime = $e->getWaitTime();
+            echo "Attempt $attempt failed. Waiting {$waitTime}s\n";
+            $e->wait();
+            
+            // Additional backoff delay
+            $backoffDelay = min(300, pow(2, $attempt)); // Max 5 minutes
+            sleep($backoffDelay);
+        }
+    }
+}
+
+// Usage
+try {
+    sendWithBackoff($MadelineProto, '@username', 'Hello!');
+} catch (FloodWaitError $e) {
+    echo "Failed after retries: " . $e->getMessage();
+}
+```
+
+### Rate Limiter Class
+
+```php
+use danog\MadelineProto\RPCError\FloodWaitError;
+
+class RateLimiter {
+    private $lastCall = 0;
+    private $minInterval = 1; // 1 second between calls
+    
+    public function __construct($minInterval = 1) {
+        $this->minInterval = $minInterval;
+    }
+    
+    public function throttle(callable $callback) {
+        $now = time();
+        $elapsed = $now - $this->lastCall;
+        
+        if ($elapsed < $this->minInterval) {
+            $sleep = $this->minInterval - $elapsed;
+            sleep($sleep);
+        }
+        
+        try {
+            $result = $callback();
+            $this->lastCall = time();
+            return $result;
+        } catch (FloodWaitError $e) {
+            $e->wait();
+            $this->lastCall = time();
+            return $callback(); // Retry once
+        }
+    }
+}
+
+// Usage
+$limiter = new RateLimiter(2); // 2 seconds between calls
+
+foreach ($users as $user) {
+    $limiter->throttle(function() use ($MadelineProto, $user) {
+        return $MadelineProto->messages->sendMessage([
+            'peer' => $user,
+            'message' => 'Broadcast message',
+        ]);
+    });
+}
+```
+
+## Premium Flood Waits
+
+Telegram Premium users have higher rate limits:
+
+```php
+use danog\MadelineProto\RPCError\FloodPremiumWaitError;
+
+try {
+    $MadelineProto->messages->sendMessage([...]);
+} catch (FloodPremiumWaitError $e) {
+    // This is a premium-only rate limit
+    echo "Premium flood wait: {$e->getWaitTime()} seconds\n";
+    echo "Consider Telegram Premium for higher limits\n";
+    $e->wait();
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Set Appropriate Flood Timeouts">
+    Configure flood timeouts based on your application:
+    - **Bots**: 30-60 seconds for user interactions
+    - **Background tasks**: 300-3600 seconds (5 mins - 1 hour)
+    - **Real-time apps**: 5-10 seconds, handle errors gracefully
+  </Accordion>
+
+  <Accordion title="Use Per-Method Limits">
+    Set `floodWaitLimit` on critical methods:
+    ```php
+    // Critical operation - wait as long as needed
+    $result = $MadelineProto->messages->sendMessage([
+        'peer' => $admin,
+        'message' => 'Important alert',
+        'floodWaitLimit' => 86400, // 24 hours
+    ]);
+    ```
+  </Accordion>
+
+  <Accordion title="Add Delays Between Requests">
+    Prevent hitting rate limits:
+    ```php
+    foreach ($users as $user) {
+        $MadelineProto->messages->sendMessage([...]);
+        usleep(500000); // 500ms delay
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Monitor Rate Limits">
+    Track and log flood wait errors:
+    ```php
+    try {
+        $MadelineProto->someMethod();
+    } catch (FloodWaitError $e) {
+        Logger::log(
+            "Flood wait: " . $e->getWaitTime() . "s",
+            Logger::WARNING
+        );
+        // Store metrics for monitoring
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Common Rate Limits
+
+<Warning>
+These are approximate limits and may vary based on account age, activity, and other factors:
+</Warning>
+
+| Action | Approximate Limit |
+|--------|------------------|
+| Messages to different users | ~30 per second |
+| Messages to same user | ~1 per second |
+| Global messages per day | ~300-500 for new accounts |
+| Channel posts | ~1 per minute |
+| Group creation | ~5 per day (new accounts) |
+| Adding users to groups | ~200 per day |
+| File uploads | Size/bandwidth dependent |
+
+## See Also
+
+- [Error Handling](/guides/error-handling) - General exception handling
+- [Settings](/api/settings/connection) - Configuring RPC settings  
+- [API Methods](/api/methods/overview) - Method parameters including floodWaitLimit

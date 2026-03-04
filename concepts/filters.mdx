@@ -1,0 +1,505 @@
+---
+title: Filters
+description: Filter incoming updates using attributes, type hints, and intersection types for precise event handling
+---
+
+## Overview
+
+MadelineProto provides a powerful filtering system that allows you to handle only the updates you care about. Filters can be combined using PHP 8.1+ intersection types for precise control.
+
+<Info>
+Filters only work with `SimpleEventHandler`. Make sure your class extends `SimpleEventHandler`, not just `EventHandler`.
+</Info>
+
+## Filter Attributes
+
+Filter attributes are applied to handler methods to match specific patterns:
+
+### Command Filters
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+
+#[FilterCommand('start')]
+public function startCommand(Message $message): void
+{
+    $message->reply('Welcome!');
+}
+
+#[FilterCommand('help')]
+public function helpCommand(Message $message): void
+{
+    $message->reply('Available commands: /start, /help');
+}
+```
+
+From `EventHandler/Filter/FilterCommand.php:40`, commands support:
+- Command name validation
+- Multiple command types (slash, dot, bang)
+- Bot username mentions
+
+### Command Types
+
+```php
+use danog\MadelineProto\EventHandler\CommandType;
+
+#[FilterCommand('test', types: [CommandType::SLASH])]
+public function slashOnly(Message $message): void
+{
+    // Only matches /test
+}
+
+#[FilterCommand('test', types: [CommandType::BANG, CommandType::DOT])]
+public function bangOrDot(Message $message): void
+{
+    // Matches !test or .test
+}
+```
+
+Available command types:
+- `CommandType::SLASH` - `/command`
+- `CommandType::BANG` - `!command`
+- `CommandType::DOT` - `.command`
+
+### Command Arguments
+
+```php
+#[FilterCommand('echo')]
+public function echoCommand(Message $message): void
+{
+    $args = $message->commandArgs;
+    $message->reply($args[0] ?? 'No arguments provided');
+}
+```
+
+From `examples/bot.php:221`, `$message->commandArgs` contains the command arguments.
+
+### Text Filters
+
+```php
+use danog\MadelineProto\EventHandler\Filter\{FilterText, FilterTextCaseInsensitive};
+
+#[FilterText('hello')]
+public function exactMatch(Message $message): void
+{
+    // Only matches exactly "hello"
+    $message->reply('Hello!');
+}
+
+#[FilterTextCaseInsensitive('hi')]
+public function caseInsensitive(Message $message): void
+{
+    // Matches "hi", "Hi", "HI", etc.
+    $message->reply('Hey there!');
+}
+```
+
+### Regex Filters
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+
+#[FilterRegex('/.*(mt?proto)[^.]?.*/i')]
+public function regexMatch(Message $message): void
+{
+    // Access captured groups via $message->matches
+    $matched = $message->matches[1];
+    $message->reply("Did you mean MadelineProto instead of $matched?");
+}
+```
+
+From `examples/bot.php:230`, regex captures are available in `$message->matches`.
+
+### Button Filters
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterButtonQueryData;
+
+#[FilterButtonQueryData('button_action')]
+public function handleButton(CallbackQuery $query): void
+{
+    $query->answer('Button clicked!');
+}
+```
+
+## Type Hint Filters
+
+Use PHP type hints to filter by update type:
+
+### Message Types
+
+```php
+use danog\MadelineProto\EventHandler\Message\{PrivateMessage, GroupMessage, ChannelMessage};
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+
+#[Handler]
+public function privateOnly(PrivateMessage $message): void
+{
+    // Only private messages
+}
+
+#[Handler]
+public function groupOnly(GroupMessage $message): void
+{
+    // Only group messages
+}
+
+#[Handler]
+public function channelOnly(ChannelMessage $message): void
+{
+    // Only channel posts
+}
+```
+
+From `EventHandler/Filter/Filter.php:98`, type hints are automatically converted to filters.
+
+## Simple Filters
+
+Simple filters are marker interfaces used with intersection types:
+
+### Direction Filters
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\{Incoming, Outgoing};
+
+#[Handler]
+public function incomingOnly(Incoming&Message $message): void
+{
+    // Only incoming messages
+}
+
+#[Handler]
+public function outgoingOnly(Outgoing&Message $message): void
+{
+    // Only outgoing messages (sent by bot)
+}
+```
+
+From `EventHandler/SimpleFilter/Incoming.php:19`, these are marker interfaces for filtering message direction.
+
+### Media Filters
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\{
+    HasPhoto, HasVideo, HasAudio, HasVoice,
+    HasDocument, HasSticker, HasGif
+};
+
+#[Handler]
+public function photoHandler(Incoming&Message&HasPhoto $message): void
+{
+    // Only messages with photos
+    $photo = $message->media;
+    $message->reply('Nice photo!');
+}
+
+#[Handler]
+public function audioHandler(Incoming&Message&HasAudio $message): void
+{
+    // Only messages with audio
+    $audio = $message->media;
+    $message->reply('Playing audio...');
+}
+```
+
+### Other Simple Filters
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\{
+    IsReply, IsEdited, IsForwarded,
+    FromAdmin, HasMedia, HasNoMedia
+};
+
+#[Handler]
+public function replyOnly(IsReply&Message $message): void
+{
+    // Only messages that are replies
+    $original = $message->getReply(Message::class);
+}
+
+#[Handler]
+public function adminOnly(FromAdmin&Message $message): void
+{
+    // Only messages from admins
+}
+
+#[Handler]
+public function editedMessages(IsEdited&Message $message): void
+{
+    // Only edited messages
+}
+```
+
+## Intersection Filters
+
+Combine multiple filters using `&` (intersection types):
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\{Incoming, FromAdmin, HasPhoto};
+
+#[Handler]
+public function adminPhotos(Incoming&FromAdmin&HasPhoto&Message $message): void
+{
+    // Only incoming photos from admins
+}
+
+#[FilterCommand('broadcast')]
+public function broadcast(Message & FromAdmin $message): void
+{
+    // /broadcast command only from admins
+}
+```
+
+From `examples/bot.php:156`, intersection types combine multiple filter conditions.
+
+## Union Filters
+
+Handle multiple update types with union types:
+
+```php
+use danog\MadelineProto\EventHandler\Message\{PrivateMessage, GroupMessage};
+
+#[Handler]
+public function privateOrGroup(PrivateMessage|GroupMessage $message): void
+{
+    // Both private and group messages
+}
+```
+
+## Custom Filters
+
+Create custom filter attributes by extending `Filter`:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\Filter;
+use danog\MadelineProto\EventHandler\Update;
+use Attribute;
+
+#[Attribute(Attribute::TARGET_METHOD)]
+class FilterPremiumUser extends Filter
+{
+    public function apply(Update $update): bool
+    {
+        if (!($update instanceof Message)) {
+            return false;
+        }
+        
+        $sender = $this->getInfo($update->senderId);
+        return $sender['premium'] ?? false;
+    }
+}
+
+// Usage
+#[FilterPremiumUser]
+public function premiumOnly(Message $message): void
+{
+    $message->reply('Thanks for being a premium user!');
+}
+```
+
+From `EventHandler/Filter/Filter.php:74`, custom filters must implement the `apply()` method.
+
+## Filter Initialization
+
+Filters can perform initialization logic:
+
+```php
+use danog\MadelineProto\EventHandler;
+
+class FilterFromChannel extends Filter
+{
+    private int $channelId;
+    
+    public function __construct(string $username)
+    {
+        // Will be resolved during initialization
+        $this->username = $username;
+    }
+    
+    public function initialize(EventHandler $API): Filter
+    {
+        // Resolve username to ID
+        $info = $API->getInfo($this->username);
+        $this->channelId = $info['bot_api_id'];
+        return $this;
+    }
+    
+    public function apply(Update $update): bool
+    {
+        return $update instanceof Message 
+            && $update->chatId === $this->channelId;
+    }
+}
+```
+
+From `EventHandler/Filter/Filter.php:78`, the `initialize()` method is called during setup.
+
+## Practical Examples
+
+### Admin-only Commands
+
+```php
+#[FilterCommand('ban')]
+public function banCommand(Message & FromAdmin $message): void
+{
+    // Only admins can use /ban
+    $message->reply('User banned!');
+}
+```
+
+### Media Download Command
+
+```php
+#[FilterCommand('dl')]
+public function downloadCommand(Incoming&Message $message): void
+{
+    $reply = $message->getReply(Message::class);
+    if (!$reply?->media) {
+        $message->reply('Reply to a media message!');
+        return;
+    }
+    
+    $message->reply('Download: ' . $reply->media->getDownloadLink());
+}
+```
+
+From `examples/bot.php:280`, this pattern checks for media in replied messages.
+
+### Story Upload from Admin
+
+```php
+use danog\MadelineProto\ParseMode;
+
+#[FilterCommand('story')]
+public function storyCommand(Message & FromAdmin $message): void
+{
+    $media = $message->getReply(Message::class)?->media;
+    if (!$media) {
+        $message->reply('Reply to a photo/video!');
+        return;
+    }
+    
+    $this->stories->sendStory(
+        peer: 'me',
+        media: $media,
+        caption: 'Posted with MadelineProto',
+        parse_mode: ParseMode::MARKDOWN,
+        privacy_rules: [['_' => 'inputPrivacyValueAllowAll']]
+    );
+}
+```
+
+From `examples/bot.php:154`, this shows filtering by admin status with command handling.
+
+### Poll Filters
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\{HasQuizPoll, HasSinglePoll, HasMultiplePoll};
+
+#[Handler]
+public function quizPoll(HasQuizPoll&Message $message): void
+{
+    // Only quiz polls
+}
+
+#[Handler]
+public function regularPoll(HasSinglePoll&Message $message): void
+{
+    // Only single-choice polls
+}
+
+#[Handler]
+public function multiplePoll(HasMultiplePoll&Message $message): void
+{
+    // Only multiple-choice polls
+}
+```
+
+## Filter Combinators
+
+Advanced filter combination:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\Combinator\{FiltersAnd, FiltersOr, FilterNot};
+
+// Manual filter combination (usually not needed with intersection types)
+class MyFilter extends Filter
+{
+    public function apply(Update $update): bool
+    {
+        $filter = new FiltersAnd(
+            new FilterPrivate,
+            new FilterIncoming,
+            new FilterNot(new FilterFromAdmin)
+        );
+        
+        return $filter->apply($update);
+    }
+}
+```
+
+From `EventHandler/Filter/Combinator/FiltersAnd.php`, combinators allow complex filter logic.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use intersection types for clarity">
+    Prefer `Incoming&FromAdmin&Message` over complex custom filters when possible.
+  </Accordion>
+  
+  <Accordion title="Keep filters simple">
+    Each filter should check one condition. Combine multiple simple filters instead of creating complex ones.
+  </Accordion>
+  
+  <Accordion title="Type hint appropriately">
+    Always type hint the most specific update type to get better IDE support and type safety.
+  </Accordion>
+  
+  <Accordion title="Validate filter inputs">
+    Custom filters should validate constructor parameters to fail fast with clear error messages.
+  </Accordion>
+</AccordionGroup>
+
+## Available Simple Filters
+
+| Filter | Description |
+|--------|-------------|
+| `Incoming` | Incoming messages (not sent by you) |
+| `Outgoing` | Outgoing messages (sent by you) |
+| `FromAdmin` | Messages from chat administrators |
+| `FromAdminOrOutgoing` | From admin or sent by you |
+| `IsReply` | Messages that are replies |
+| `IsReplyToSelf` | Messages replying to your messages |
+| `IsEdited` | Edited messages |
+| `IsNotEdited` | Non-edited messages |
+| `IsForwarded` | Forwarded messages |
+| `HasMedia` | Messages with any media |
+| `HasNoMedia` | Messages without media |
+| `HasPhoto` | Messages with photos |
+| `HasVideo` | Messages with videos |
+| `HasAudio` | Messages with audio |
+| `HasVoice` | Messages with voice messages |
+| `HasDocument` | Messages with documents |
+| `HasSticker` | Messages with stickers |
+| `HasGif` | Messages with GIFs/animations |
+| `HasRoundVideo` | Messages with round videos |
+| `HasDocumentPhoto` | Messages with photo documents |
+| `HasPoll` | Messages with polls |
+| `HasQuizPoll` | Messages with quiz polls |
+| `HasSinglePoll` | Messages with single-choice polls |
+| `HasMultiplePoll` | Messages with multiple-choice polls |
+| `HasTopic` | Messages in forum topics |
+| `Running` | Running call/broadcast |
+| `Ended` | Ended call/broadcast |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Updates" icon="bell" href="/concepts/updates">
+    Explore all available update types
+  </Card>
+  <Card title="Event Handlers" icon="bolt" href="/concepts/event-handlers">
+    Learn more about event handler patterns
+  </Card>
+</CardGroup>

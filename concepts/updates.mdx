@@ -1,0 +1,538 @@
+---
+title: Updates
+description: Understanding Telegram update types and how to handle them in MadelineProto
+---
+
+## Overview
+
+Updates represent real-time events from Telegram, such as new messages, edits, reactions, and more. MadelineProto provides strongly-typed update classes that make handling these events intuitive and type-safe.
+
+<Info>
+All update classes extend `danog\MadelineProto\EventHandler\Update` from `EventHandler/Update.php:31`.
+</Info>
+
+## Update Base Class
+
+All updates inherit from the `Update` class:
+
+```php
+namespace danog\MadelineProto\EventHandler;
+
+abstract class Update extends IpcCapable implements JsonSerializable
+{
+    // Base functionality for all updates
+}
+```
+
+### Serialization
+
+<Warning>
+Use `serialize()`, not `json_encode()` to serialize updates. JSON encoding is only for logging purposes.
+</Warning>
+
+```php
+// Correct
+$serialized = serialize($update);
+$update = unserialize($serialized);
+
+// For logging only
+$json = json_encode($update);
+```
+
+## Message Updates
+
+Message updates are the most common update type.
+
+### Message Hierarchy
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Message\{PrivateMessage, GroupMessage, ChannelMessage, SecretMessage};
+
+// Base message class
+#[Handler]
+public function anyMessage(Message $message): void
+{
+    // Handles all message types
+}
+
+// Specific message types
+#[Handler]
+public function privateMessage(PrivateMessage $message): void
+{
+    // Only private chats
+}
+
+#[Handler]
+public function groupMessage(GroupMessage $message): void
+{
+    // Only groups
+}
+
+#[Handler]
+public function channelMessage(ChannelMessage $message): void
+{
+    // Only channels
+}
+```
+
+### Message Properties
+
+Common properties available on all message objects:
+
+```php
+$message->id;           // Message ID
+$message->chatId;       // Chat ID
+$message->senderId;     // Sender user ID
+$message->message;      // Message text
+$message->date;         // Timestamp
+$message->media;        // Media object (if present)
+$message->replyToMsgId; // ID of replied message
+```
+
+### Command Information
+
+```php
+$message->command;      // Command name (without prefix)
+$message->commandType;  // CommandType enum (SLASH, BANG, DOT)
+$message->commandArgs;  // Array of command arguments
+```
+
+From `examples/bot.php:221`, command arguments are automatically parsed.
+
+### Message Methods
+
+```php
+// Reply to message
+$message->reply(
+    message: 'Hello!',
+    parseMode: ParseMode::MARKDOWN
+);
+
+// Delete message
+$message->delete();
+
+// Edit message
+$message->editText('Updated text');
+
+// Get replied message
+$replied = $message->getReply(Message::class);
+
+// Pin message
+$message->pin();
+
+// Add reaction
+$message->addReaction('👍');
+
+// Remove reaction
+$message->delReaction('👍');
+```
+
+## Service Messages
+
+Service messages represent system events:
+
+```php
+use danog\MadelineProto\EventHandler\Message\ServiceMessage;
+use danog\MadelineProto\EventHandler\Message\Service\*;
+
+#[Handler]
+public function dialogPhotoChanged(DialogPhotoChanged $message): void
+{
+    if ($message->photo) {
+        $message->reply('New group photo!');
+    } else {
+        $message->reply('Group photo removed');
+    }
+}
+
+#[Handler]
+public function userJoined(DialogMemberJoined $message): void
+{
+    $message->reply('Welcome to the group!');
+}
+
+#[Handler]
+public function pinnedMessage(DialogMessagePinned $message): void
+{
+    $pinned = $message->pinnedMessage;
+    $message->reply('Message pinned!');
+}
+```
+
+From `examples/bot.php:263`, service messages provide structured data about chat events.
+
+## Media Updates
+
+Handle media in messages:
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\HasPhoto;
+
+#[Handler]
+public function handlePhoto(Incoming&HasPhoto&Message $message): void
+{
+    $photo = $message->media;
+    
+    // Download photo
+    $path = $photo->downloadToDir('/tmp');
+    
+    // Get download link
+    $link = $photo->getDownloadLink();
+    
+    // Get photo info
+    $size = $photo->size;
+    $mimeType = $photo->mimeType;
+}
+```
+
+### Media Types
+
+Different media types have specific properties:
+
+```php
+// Photo
+$message->media->size;
+$message->media->width;
+$message->media->height;
+
+// Video
+$message->media->duration;
+$message->media->width;
+$message->media->height;
+
+// Audio
+$message->media->duration;
+$message->media->title;
+$message->media->performer;
+
+// Document
+$message->media->fileName;
+$message->media->size;
+$message->media->mimeType;
+```
+
+## Inline Updates
+
+### Inline Queries
+
+```php
+use danog\MadelineProto\EventHandler\InlineQuery;
+
+#[Handler]
+public function handleInlineQuery(InlineQuery $query): void
+{
+    $searchQuery = $query->query;
+    
+    $query->answer([
+        [
+            '_' => 'inputBotInlineResult',
+            'id' => '1',
+            'type' => 'article',
+            'title' => 'Result 1',
+            'description' => 'Description',
+            'send_message' => [
+                '_' => 'inputBotInlineMessageText',
+                'message' => 'Result text'
+            ]
+        ]
+    ]);
+}
+```
+
+### Callback Queries
+
+```php
+use danog\MadelineProto\EventHandler\CallbackQuery;
+
+#[Handler]
+public function handleCallback(CallbackQuery $query): void
+{
+    $data = $query->data; // Button callback data
+    
+    $query->answer(
+        message: 'Button clicked!',
+        alert: true
+    );
+    
+    // Edit the message
+    $query->editText('Updated text');
+}
+```
+
+## VoIP Updates
+
+```php
+use danog\MadelineProto\VoIP;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+#[Handler]
+public function incomingCall(Incoming&VoIP $call): void
+{
+    // Accept call
+    $call->accept();
+    
+    // Play audio
+    $call->play(new RemoteUrl('https://example.com/audio.mp3'));
+    
+    // Or reject
+    // $call->discard();
+}
+
+#[FilterCommand('call')]
+public function makeCall(Message $message): void
+{
+    $call = $this->requestCall($message->senderId);
+    $call->play(new RemoteUrl('https://example.com/audio.mp3'));
+}
+```
+
+From `examples/bot.php:291`, VoIP calls support audio playback and streaming.
+
+## Broadcast Updates
+
+```php
+use danog\MadelineProto\Broadcast\Progress;
+use danog\MadelineProto\Broadcast\Status;
+
+#[Handler]
+public function broadcastProgress(Progress $progress): void
+{
+    if ($progress->status === Status::FINISHED) {
+        $this->sendMessageToAdmins(
+            "Broadcast complete!\n" .
+            "Sent: {$progress->sent}\n" .
+            "Failed: {$progress->failed}"
+        );
+    }
+}
+```
+
+From `examples/bot.php:209`, broadcast progress updates track message delivery status.
+
+## Channel/Group Updates
+
+### Discussion Messages
+
+```php
+#[Handler]
+public function channelPost(Incoming&ChannelMessage $message): void
+{
+    if ($message->getDiscussion()) {
+        // Post has comments enabled
+        $message->getDiscussion()->reply('First!');
+    }
+}
+```
+
+From `examples/bot.php:181`, channel messages can have linked discussion groups.
+
+### Topic Messages
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\HasTopic;
+
+#[Handler]
+public function topicMessage(HasTopic&Message $message): void
+{
+    $topicId = $message->topicId;
+    $message->reply('Message in topic!');
+}
+```
+
+## Story Updates
+
+```php
+use danog\MadelineProto\EventHandler\Story\Story;
+
+#[Handler]
+public function newStory(Story $story): void
+{
+    // Handle new story
+    $this->logger("New story from {$story->senderId}");
+}
+```
+
+## Poll Updates
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\{HasQuizPoll, HasSinglePoll};
+
+#[Handler]
+public function quizPoll(HasQuizPoll&Message $message): void
+{
+    $poll = $message->media;
+    $question = $poll->poll->question;
+    $message->reply("Quiz: $question");
+}
+
+#[Handler]
+public function regularPoll(HasSinglePoll&Message $message): void
+{
+    $poll = $message->media;
+    // Handle regular poll
+}
+```
+
+## Handling All Updates
+
+For advanced use cases, handle all update types:
+
+```php
+use danog\MadelineProto\EventHandler;
+
+class MyEventHandler extends EventHandler
+{
+    public function onAny(array $update): void
+    {
+        // Raw update array
+        $this->logger(json_encode($update));
+    }
+}
+```
+
+From `EventHandler.php:332`, the `onAny` method receives all updates not handled by specific methods.
+
+<Warning>
+`onAny` receives raw MTProto arrays, not typed objects. Use typed handlers when possible.
+</Warning>
+
+## Update Flow
+
+1. Telegram sends update to MadelineProto
+2. MadelineProto deserializes the update
+3. Update is converted to typed object
+4. Filters are applied to determine matching handlers
+5. All matching handlers are called concurrently
+6. Each handler runs in its own fiber
+
+From `EventHandler.php:248`, handlers are registered during event handler initialization.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use specific update types">
+    Type hint the most specific update type for better IDE support and type safety.
+  </Accordion>
+  
+  <Accordion title="Handle errors gracefully">
+    Always wrap API calls in try-catch blocks to handle RPC errors.
+  </Accordion>
+  
+  <Accordion title="Avoid blocking operations">
+    Use async operations to prevent blocking the event loop and slowing down update processing.
+  </Accordion>
+  
+  <Accordion title="Use filters effectively">
+    Combine filters to reduce handler complexity and improve readability.
+  </Accordion>
+</AccordionGroup>
+
+## Common Update Patterns
+
+### Echo Bot
+
+```php
+#[Handler]
+public function echo(Incoming&Message $message): void
+{
+    $message->reply($message->message);
+}
+```
+
+### Media Downloader
+
+```php
+#[Handler]
+public function downloadMedia(HasMedia&Message $message): void
+{
+    $path = $message->media->downloadToDir('/downloads');
+    $message->reply("Downloaded to: $path");
+}
+```
+
+### Auto Reactions
+
+```php
+#[Handler]
+public function autoReact(Incoming&Message $message): void
+{
+    if (str_contains($message->message, 'awesome')) {
+        $message->addReaction('🔥');
+    }
+}
+```
+
+### Forward to Channel
+
+```php
+#[FilterCommand('forward')]
+public function forwardToChannel(Message & FromAdmin $message): void
+{
+    if (!$message->replyToMsgId) {
+        $message->reply('Reply to a message to forward');
+        return;
+    }
+    
+    $this->messages->forwardMessages([
+        'from_peer' => $message->chatId,
+        'id' => [$message->replyToMsgId],
+        'to_peer' => '@my_channel'
+    ]);
+}
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Message\Service\DialogPhotoChanged;
+use danog\MadelineProto\EventHandler\SimpleFilter\{Incoming, HasPhoto, FromAdmin};
+use danog\MadelineProto\ParseMode;
+
+class UpdateBot extends SimpleEventHandler
+{
+    #[FilterCommand('start')]
+    public function start(Message $message): void
+    {
+        $message->reply('Bot started!');
+    }
+    
+    #[Handler]
+    public function handlePhoto(Incoming&HasPhoto&Message $message): void
+    {
+        $link = $message->media->getDownloadLink();
+        $message->reply("Photo download: $link");
+    }
+    
+    #[Handler]
+    public function groupPhotoChanged(DialogPhotoChanged $service): void
+    {
+        if ($service->photo) {
+            $service->reply('Group photo updated!');
+        }
+    }
+    
+    #[FilterCommand('admin')]
+    public function adminCommand(Message & FromAdmin $message): void
+    {
+        $message->reply('Admin command executed');
+    }
+}
+
+UpdateBot::startAndLoop('bot.madeline');
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Filters" icon="filter" href="/concepts/filters">
+    Master filtering techniques
+  </Card>
+  <Card title="Event Handlers" icon="bolt" href="/concepts/event-handlers">
+    Advanced event handler patterns
+  </Card>
+</CardGroup>

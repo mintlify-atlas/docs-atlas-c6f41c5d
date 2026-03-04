@@ -1,122 +1,147 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "MadelineProto",
+  "theme": "aspen",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#0088cc",
+    "light": "#54a9eb",
+    "dark": "#006699"
   },
   "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/danog/MadelineProto"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/danog/MadelineProto"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
+              "installation",
               "quickstart",
-              "development"
+              "requirements"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/creating-client",
+              "concepts/login",
+              "concepts/async",
+              "concepts/event-handlers",
+              "concepts/filters",
+              "concepts/updates"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Features",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "features/overview",
+              "features/messages",
+              "features/files",
+              "features/calls",
+              "features/secret-chats",
+              "features/inline-buttons",
+              "features/broadcasting"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Advanced",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "advanced/plugins",
+              "advanced/database",
+              "advanced/settings",
+              "advanced/docker",
+              "advanced/metrics",
+              "advanced/proxy"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/chat-info",
+              "guides/dialogs",
+              "guides/error-handling",
+              "guides/flood-wait",
+              "guides/logging"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core Classes",
             "pages": [
-              "api-reference/introduction"
+              "api/api",
+              "api/event-handler",
+              "api/simple-event-handler"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Event Types",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/events/messages",
+              "api/events/updates",
+              "api/events/inline-query",
+              "api/events/callback-query"
+            ]
+          },
+          {
+            "group": "Settings",
+            "pages": [
+              "api/settings/app-info",
+              "api/settings/connection",
+              "api/settings/database",
+              "api/settings/logger",
+              "api/settings/files"
+            ]
+          },
+          {
+            "group": "MTProto Methods",
+            "pages": [
+              "api/methods/overview",
+              "api/methods/messages",
+              "api/methods/channels",
+              "api/methods/users"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Bot Examples",
+            "pages": [
+              "examples/simple-bot",
+              "examples/full-bot",
+              "examples/secret-bot"
+            ]
+          },
+          {
+            "group": "Advanced Examples",
+            "pages": [
+              "examples/file-download",
+              "examples/broadcasting",
+              "examples/voice-calls",
+              "examples/plugins"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

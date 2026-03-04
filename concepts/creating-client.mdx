@@ -1,0 +1,189 @@
+---
+title: Creating a Client
+description: Learn how to initialize and configure a MadelineProto API client for Telegram bots and userbots
+---
+
+## Overview
+
+MadelineProto provides the `API` class as the main entry point for interacting with Telegram's MTProto protocol. The client handles session management, serialization, and IPC server initialization automatically.
+
+## Basic Initialization
+
+The simplest way to create a client is by instantiating the `API` class with a session name:
+
+```php
+use danog\MadelineProto\API;
+
+$MadelineProto = new API('session.madeline');
+```
+
+This creates a session file named `session.madeline` that stores authentication data and other state information.
+
+## Configuration with Settings
+
+For production applications, you should configure the client with custom settings:
+
+```php
+use danog\MadelineProto\API;
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\AppInfo;
+
+$settings = new Settings;
+
+// Configure API credentials
+$appInfo = $settings->getAppInfo()
+    ->setApiId(12345)
+    ->setApiHash('your_api_hash');
+
+// Create the client
+$MadelineProto = new API('bot.madeline', $settings);
+```
+
+<Note>
+You can obtain API credentials from [my.telegram.org](https://my.telegram.org/apps).
+</Note>
+
+## Session Management
+
+MadelineProto automatically:
+- Serializes the session to disk after changes
+- Locks the session file to prevent concurrent access
+- Supports IPC for running multiple processes
+
+### Session Paths
+
+The session parameter can be:
+- A simple filename: `'bot.madeline'`
+- An absolute path: `'/var/lib/telegram/session.madeline'`
+- A directory path (session will be created inside)
+
+## API Class Reference
+
+### Constants
+
+<ParamField path="API::RELEASE" type="string">
+  Current version: `'8.6.4'`
+</ParamField>
+
+<ParamField path="API::NOT_LOGGED_IN" type="int">
+  Login state: Not logged in (value: `0`)
+</ParamField>
+
+<ParamField path="API::WAITING_CODE" type="int">
+  Login state: Waiting for login code (value: `1`)
+</ParamField>
+
+<ParamField path="API::WAITING_PASSWORD" type="int">
+  Login state: Waiting for 2FA password (value: `2`)
+</ParamField>
+
+<ParamField path="API::LOGGED_IN" type="int">
+  Login state: Successfully logged in (value: `3`)
+</ParamField>
+
+<ParamField path="API::LOGGED_OUT" type="int">
+  Login state: Logged out (value: `4`)
+</ParamField>
+
+### Peer Type Constants
+
+```php
+API::PEER_TYPE_USER      // 'user'
+API::PEER_TYPE_BOT       // 'bot'
+API::PEER_TYPE_GROUP     // 'chat'
+API::PEER_TYPE_SUPERGROUP // 'supergroup'
+API::PEER_TYPE_CHANNEL   // 'channel'
+```
+
+## Advanced Settings
+
+### Database Backend
+
+Configure database storage for improved performance and reduced memory usage:
+
+```php
+use danog\MadelineProto\Settings\Database\Redis;
+use danog\MadelineProto\Settings\Database\Mysql;
+use danog\MadelineProto\Settings\Database\Postgres;
+
+// Redis
+$settings->setDb(
+    (new Redis)
+        ->setDatabase(0)
+        ->setPassword('your_password')
+);
+
+// MySQL
+$settings->setDb(
+    (new Mysql)
+        ->setDatabase('MadelineProto')
+        ->setUsername('user')
+        ->setPassword('pass')
+);
+
+// PostgreSQL
+$settings->setDb(
+    (new Postgres)
+        ->setDatabase('MadelineProto')
+        ->setUsername('user')
+        ->setPassword('pass')
+);
+```
+
+### Logger Configuration
+
+```php
+use danog\MadelineProto\Logger;
+
+$settings->getLogger()
+    ->setLevel(Logger::LEVEL_ULTRA_VERBOSE)
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra('bot.log');
+```
+
+### Connection Settings
+
+```php
+$settings->getConnection()
+    ->setMaxMediaSocketCount(20)
+    ->setTimeout(10)
+    ->setRetry(true);
+```
+
+## IPC Mode
+
+MadelineProto can run in two modes:
+
+1. **IPC Client Mode**: Connects to an existing MadelineProto instance
+2. **Full Mode**: Runs the complete MTProto implementation
+
+The mode is automatically selected based on whether an IPC server is already running.
+
+### Forcing Full Mode
+
+```php
+use danog\MadelineProto\Settings\Ipc;
+
+$settings->getIpc()->setSlow(true);
+```
+
+## Constructor Parameters
+
+<ParamField path="session" type="string" required>
+  Session file path or name
+</ParamField>
+
+<ParamField path="settings" type="SettingsAbstract" default="null">
+  Configuration settings for the client
+</ParamField>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Login Methods" icon="key" href="/concepts/login">
+    Learn how to authenticate as a bot or user
+  </Card>
+  <Card title="Event Handlers" icon="bolt" href="/concepts/event-handlers">
+    Set up event handlers to receive updates
+  </Card>
+</CardGroup>

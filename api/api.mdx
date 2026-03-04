@@ -1,0 +1,186 @@
+---
+title: API Class
+description: Main API wrapper for MadelineProto
+---
+
+# API Class
+
+The main API wrapper for MadelineProto. This is the primary entry point for interacting with the Telegram API.
+
+## Constructor
+
+<ParamField path="session" type="string" required>
+  Session name for storing session data
+</ParamField>
+
+<ParamField path="settings" type="SettingsAbstract">
+  Optional settings object for configuring MadelineProto
+</ParamField>
+
+```php
+use danog\MadelineProto\API;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+## Constants
+
+### Release Version
+
+<ResponseField name="RELEASE" type="string">
+  Current release version (8.6.4)
+</ResponseField>
+
+### Login States
+
+<ResponseField name="NOT_LOGGED_IN" type="int" default="0">
+  We're not logged in
+</ResponseField>
+
+<ResponseField name="WAITING_CODE" type="int" default="1">
+  We're waiting for the login code
+</ResponseField>
+
+<ResponseField name="WAITING_SIGNUP" type="int" default="-1">
+  We're waiting for parameters to sign up
+</ResponseField>
+
+<ResponseField name="WAITING_PASSWORD" type="int" default="2">
+  We're waiting for the 2FA password
+</ResponseField>
+
+<ResponseField name="LOGGED_IN" type="int" default="3">
+  We're logged in
+</ResponseField>
+
+<ResponseField name="LOGGED_OUT" type="int" default="4">
+  We're logged out, the session will be deleted ASAP
+</ResponseField>
+
+### Peer Types
+
+<ResponseField name="PEER_TYPE_USER" type="string" default="user">
+  This peer is a user
+</ResponseField>
+
+<ResponseField name="PEER_TYPE_BOT" type="string" default="bot">
+  This peer is a bot
+</ResponseField>
+
+<ResponseField name="PEER_TYPE_GROUP" type="string" default="chat">
+  This peer is a normal group
+</ResponseField>
+
+<ResponseField name="PEER_TYPE_SUPERGROUP" type="string" default="supergroup">
+  This peer is a supergroup
+</ResponseField>
+
+<ResponseField name="PEER_TYPE_CHANNEL" type="string" default="channel">
+  This peer is a channel
+</ResponseField>
+
+### Info Types
+
+<ResponseField name="INFO_TYPE_PEER" type="int" default="0">
+  Generate only peer information
+</ResponseField>
+
+<ResponseField name="INFO_TYPE_CONSTRUCTOR" type="int" default="1">
+  Generate only constructor information
+</ResponseField>
+
+<ResponseField name="INFO_TYPE_ID" type="int" default="2">
+  Generate only ID information
+</ResponseField>
+
+<ResponseField name="INFO_TYPE_ALL" type="int" default="3">
+  Generate all information
+</ResponseField>
+
+<ResponseField name="INFO_TYPE_USERNAMES" type="int" default="4">
+  Generate all usernames
+</ResponseField>
+
+<ResponseField name="INFO_TYPE_TYPE" type="int" default="5">
+  Generate just type info
+</ResponseField>
+
+## Methods
+
+### getWebAPITemplate
+
+Obtain the API ID UI template.
+
+<ResponseField name="return" type="string">
+  The API ID UI template
+</ResponseField>
+
+```php
+$template = $MadelineProto->getWebAPITemplate();
+```
+
+### setWebApiTemplate
+
+Set the API ID UI template.
+
+<ParamField path="template" type="string" required>
+  The template to set
+</ParamField>
+
+```php
+$MadelineProto->setWebApiTemplate($customTemplate);
+```
+
+### startAndLoopMulti
+
+Start multiple instances of MadelineProto and event handlers (enables async).
+
+<ParamField path="instances" type="array<API>" required>
+  Array of MadelineProto API instances
+</ParamField>
+
+<ParamField path="eventHandler" type="array<class-string>|class-string" required>
+  Event handler class name(s)
+</ParamField>
+
+```php
+use danog\MadelineProto\API;
+
+$instances = [
+    'bot1' => new API('bot1.madeline'),
+    'bot2' => new API('bot2.madeline'),
+];
+
+API::startAndLoopMulti($instances, MyEventHandler::class);
+```
+
+## Usage Example
+
+```php
+use danog\MadelineProto\API;
+use danog\MadelineProto\Settings;
+
+// Create settings
+$settings = new Settings;
+$settings->getAppInfo()
+    ->setApiId(12345)
+    ->setApiHash('0123456789abcdef0123456789abcdef');
+
+// Initialize API
+$MadelineProto = new API('session.madeline', $settings);
+
+// Start the bot
+$MadelineProto->start();
+
+// Make API calls
+$me = $MadelineProto->getSelf();
+echo "Logged in as: {$me['first_name']}\n";
+```
+
+## See Also
+
+- [EventHandler](/api/event-handler) - For handling updates
+- [Settings](/api/settings/app-info) - For configuration options
+- [Methods Overview](/api/methods/overview) - Available API methods

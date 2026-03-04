@@ -1,0 +1,291 @@
+---
+title: Broadcasting Example
+description: Send messages to multiple users with progress tracking and error handling
+---
+
+Broadcasting allows you to send messages to multiple users efficiently. MadelineProto provides built-in progress tracking and error handling.
+
+## Basic Broadcasting
+
+From `bot.php`, here's how to broadcast messages:
+
+```php
+use danog\MadelineProto\Broadcast\Progress;
+use danog\MadelineProto\Broadcast\Status;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+
+class MyEventHandler extends SimpleEventHandler
+{
+    #[FilterCommand('broadcast')]
+    public function broadcastCommand(Message & FromAdmin $message): void
+    {
+        // We can broadcast messages to all users with /broadcast
+        if (!$message->replyToMsgId) {
+            $message->reply("You should reply to the message you want to broadcast.");
+            return;
+        }
+        $this->broadcastForwardMessages(
+            from_peer: $message->senderId,
+            message_ids: [$message->replyToMsgId],
+            drop_author: true,
+            pin: true,
+        );
+    }
+}
+```
+
+## Progress Tracking
+
+Track broadcast progress in real-time:
+
+```php
+private int $lastLog = 0;
+
+/**
+ * Handles updates to an in-progress broadcast.
+ */
+#[Handler]
+public function handleBroadcastProgress(Progress $progress): void
+{
+    if (time() - $this->lastLog > 5 || $progress->status === Status::FINISHED) {
+        $this->lastLog = time();
+        $this->sendMessageToAdmins((string) $progress);
+    }
+}
+```
+
+<Tip>
+The `Progress` handler is called automatically during broadcasts. Limit logging frequency to avoid spam.
+</Tip>
+
+## Broadcast Methods
+
+### Forward Messages
+
+Forward existing messages to all users:
+
+```php
+$this->broadcastForwardMessages(
+    from_peer: $message->senderId,
+    message_ids: [$message->replyToMsgId],
+    drop_author: true,  // Hide original author
+    pin: true,          // Pin in recipient chats
+);
+```
+
+### Send Custom Messages
+
+Send custom text to all users:
+
+```php
+$this->broadcastMessages(
+    message: "Important announcement from @MadelineProto!",
+    parse_mode: ParseMode::MARKDOWN,
+    pin: true,
+);
+```
+
+### Send Media
+
+Broadcast media files:
+
+```php
+$this->broadcastPhoto(
+    file: new LocalFile('announcement.jpg'),
+    caption: "Check out this announcement!",
+    parse_mode: ParseMode::MARKDOWN,
+);
+```
+
+## Progress Object
+
+The `Progress` object provides detailed information:
+
+```php
+#[Handler]
+public function handleBroadcastProgress(Progress $progress): void
+{
+    $status = match($progress->status) {
+        Status::PENDING => "Pending",
+        Status::BROADCASTING => "Broadcasting",
+        Status::FINISHED => "Finished",
+        Status::FAILED => "Failed",
+    };
+    
+    $message = sprintf(
+        "Broadcast %s: %d/%d sent, %d failed",
+        $status,
+        $progress->sent,
+        $progress->total,
+        $progress->failed
+    );
+    
+    $this->sendMessageToAdmins($message);
+}
+```
+
+### Progress Properties
+
+- `$progress->status` - Current status (PENDING, BROADCASTING, FINISHED, FAILED)
+- `$progress->sent` - Number of messages sent successfully
+- `$progress->failed` - Number of failed sends
+- `$progress->total` - Total number of recipients
+
+## Admin-Only Broadcasting
+
+Restrict broadcasting to admins:
+
+```php
+#[FilterCommand('broadcast')]
+public function broadcastCommand(Message & FromAdmin $message): void
+{
+    // Only admins can access this method
+    $this->broadcastForwardMessages(
+        from_peer: $message->senderId,
+        message_ids: [$message->replyToMsgId],
+        drop_author: true,
+        pin: true,
+    );
+}
+```
+
+<Note>
+The `FromAdmin` filter ensures only users listed in `getReportPeers()` can execute this command.
+</Note>
+
+## Complete Example
+
+Here's a full working example from `tgstories_dl_bot.php`:
+
+```php
+final class StoriesEventHandler extends SimpleEventHandler
+{
+    private const ADMIN = "@danogentili";
+
+    public function getReportPeers()
+    {
+        return self::ADMIN;
+    }
+
+    private int $lastLog = 0;
+    
+    /**
+     * Handles updates to an in-progress broadcast.
+     */
+    public function onUpdateBroadcastProgress(Progress $progress): void
+    {
+        if (time() - $this->lastLog > 5 || $progress->status === Status::FINISHED) {
+            $this->lastLog = time();
+            $this->sendMessageToAdmins((string) $progress);
+        }
+    }
+
+    #[FilterCommand('broadcast')]
+    public function broadcastCommand(Message & FromAdmin $message): void
+    {
+        // We can broadcast messages to all users with /broadcast
+        if (!$message->replyToMsgId) {
+            $message->reply("You should reply to the message you want to broadcast.");
+            return;
+        }
+        $this->broadcastForwardMessages(
+            from_peer: $message->senderId,
+            message_ids: [$message->replyToMsgId],
+            drop_author: true,
+            pin: true,
+        );
+    }
+}
+```
+
+## Usage
+
+1. Reply to any message with `/broadcast`
+2. The bot forwards it to all users who have interacted with it
+3. Progress updates are sent to admins every 5 seconds
+4. Final status is sent when complete
+
+## Error Handling
+
+MadelineProto automatically handles:
+- Rate limits (respects Telegram's flood wait)
+- Blocked users (skips automatically)
+- Deleted accounts (skips automatically)
+- Network errors (retries automatically)
+
+<Tip>
+Failed sends are tracked in `$progress->failed`. The bot continues broadcasting even if some sends fail.
+</Tip>
+
+## Targeting Specific Users
+
+Broadcast to a custom list:
+
+```php
+$users = [123456789, 987654321, '@username'];
+
+$this->broadcastCustom(
+    recipients: $users,
+    message: "Hello specific users!"
+);
+```
+
+## Best Practices
+
+<Note>
+**Respect rate limits.** Telegram enforces strict rate limits on broadcasts. MadelineProto handles this automatically, but expect broadcasts to take time for large user bases.
+</Note>
+
+<Tip>
+**Use progress tracking.** Always implement a progress handler to monitor broadcast status and identify issues.
+</Tip>
+
+<Tip>
+**Pin important messages.** Use the `pin: true` parameter for critical announcements.
+</Tip>
+
+<Note>
+**Drop author for privacy.** Use `drop_author: true` when forwarding to hide the original sender's information.
+</Note>
+
+## Performance Considerations
+
+- Broadcasts are sent asynchronously in the background
+- The command returns immediately
+- Progress updates are sent via the handler
+- Large broadcasts (10,000+ users) may take several minutes
+
+## Alternative: Manual Broadcasting
+
+For more control, broadcast manually:
+
+```php
+public function customBroadcast(string $message): void
+{
+    $users = $this->getAllUsers(); // Your method to get user list
+    
+    foreach ($users as $userId) {
+        try {
+            $this->sendMessage(
+                peer: $userId,
+                message: $message
+            );
+        } catch (\Exception $e) {
+            $this->logger("Failed to send to $userId: " . $e->getMessage());
+        }
+    }
+}
+```
+
+<Note>
+Manual broadcasting doesn't have automatic rate limit handling. Use built-in methods when possible.
+</Note>
+
+## Next Steps
+
+- See [Full Bot Example](/examples/full-bot) for more features
+- Learn about [File Downloads](/examples/file-download)
+- Check out [Plugins](/examples/plugins) for modular code

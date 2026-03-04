@@ -1,0 +1,218 @@
+---
+title: Features Overview
+description: Comprehensive overview of MadelineProto's powerful features for building Telegram bots and userbots
+---
+
+MadelineProto is a fully async PHP library that provides complete access to Telegram's MTProto API, enabling you to build powerful bots and userbots with capabilities that go far beyond the official Bot API.
+
+## Core Features
+
+MadelineProto can do everything official Telegram clients can do, and more:
+
+<CardGroup cols={2}>
+  <Card title="Message Handling" icon="message" href="/features/messages">
+    Send, receive, edit, and delete messages with full support for all message types and entities
+  </Card>
+  
+  <Card title="File Management" icon="file" href="/features/files">
+    Upload and download files of any size with progress tracking and streaming support
+  </Card>
+  
+  <Card title="VoIP Calls" icon="phone" href="/features/calls">
+    Make and receive Telegram voice calls with audio streaming capabilities
+  </Card>
+  
+  <Card title="Secret Chats" icon="lock" href="/features/secret-chats">
+    End-to-end encrypted secret chats with perfect forward secrecy
+  </Card>
+  
+  <Card title="Inline Buttons" icon="keyboard" href="/features/inline-buttons">
+    Create interactive interfaces with inline and reply keyboards
+  </Card>
+  
+  <Card title="Broadcasting" icon="tower-broadcast" href="/features/broadcasting">
+    Send messages to all users, groups, and channels efficiently
+  </Card>
+</CardGroup>
+
+## Event-Driven Architecture
+
+MadelineProto uses a modern event handler system that makes building bots intuitive:
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\SimpleEventHandler;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void
+    {
+        $message->reply("Got your message: " . $message->message);
+    }
+}
+```
+
+## Advanced Capabilities
+
+### 1. Async Everything
+
+MadelineProto is fully async using AMPHP, allowing you to handle thousands of concurrent operations:
+
+- Non-blocking file uploads/downloads
+- Parallel message sending
+- Concurrent API requests
+- Efficient resource utilization
+
+### 2. Multiple Authentication Methods
+
+- **Phone number login** (user accounts)
+- **Bot token login** (bot accounts)
+- **QR code login** (user accounts)
+- Support for both bots and userbots
+
+### 3. Rich Media Support
+
+Handle all Telegram media types:
+
+- Photos and images
+- Videos and animations (GIFs)
+- Audio files and voice messages
+- Documents and files up to 4GB
+- Stickers and custom emojis
+- Telegram Stories
+
+### 4. Advanced Message Features
+
+- **Parse modes**: Markdown, HTML, and plain text
+- **Message entities**: Mentions, URLs, hashtags, commands
+- **Reply markup**: Inline buttons, keyboards
+- **Message scheduling**: Send messages at specific times
+- **Silent messages**: No notifications
+- **Protected content**: Disable forwarding
+
+### 5. Database Integration
+
+Optional database backends to reduce RAM usage:
+
+```php
+use danog\MadelineProto\Settings\Database\Redis;
+use danog\MadelineProto\Settings\Database\Mysql;
+use danog\MadelineProto\Settings\Database\Postgres;
+
+// Use Redis for session storage
+$settings->setDb((new Redis)
+    ->setDatabase(0)
+    ->setPassword('your-password')
+);
+```
+
+### 6. Filters and Handlers
+
+Powerful filtering system for handling specific updates:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+
+#[FilterCommand('start')]
+public function startCommand(Message & FromAdmin $message): void
+{
+    $message->reply("Welcome, admin!");
+}
+```
+
+### 7. Plugin System
+
+Extend functionality with reusable plugins:
+
+```php
+public static function getPlugins(): array
+{
+    return [
+        RestartPlugin::class, // Adds /restart command
+    ];
+}
+```
+
+## Performance Features
+
+### Metrics and Monitoring
+
+MadelineProto can expose Prometheus metrics:
+
+```php
+$settings->getMetrics()->setEnablePrometheusCollection(true);
+$settings->getMetrics()->setMetricsBindTo(fromString("127.0.0.1:12345"));
+```
+
+Access metrics at:
+- `/metrics` - Prometheus format
+- `/debug/pprof` - Memory profiling
+
+### Cron Jobs
+
+Schedule periodic tasks:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+
+#[Cron(period: 60.0)] // Run every 60 seconds
+public function periodicTask(): void
+{
+    $this->logger("Running periodic task!");
+}
+```
+
+## Platform Support
+
+- **PHP 8.2+** required
+- **Linux, macOS, Windows** support
+- **Docker images** available for linux/amd64, linux/arm64, linux/riscv64
+- **Web and CLI** deployment
+
+## Getting Started
+
+Install MadelineProto and start building:
+
+```php
+<?php
+
+if (!file_exists('madeline.php')) {
+    copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+}
+include 'madeline.php';
+
+class Bot extends \danog\MadelineProto\SimpleEventHandler
+{
+    public function getReportPeers() { return ["@admin"]; }
+    
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void {
+        $message->reply("Hello from MadelineProto!");
+    }
+}
+
+Bot::startAndLoop('bot.madeline');
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sending Messages" icon="paper-plane" href="/features/messages">
+    Learn how to send and receive messages
+  </Card>
+  
+  <Card title="File Operations" icon="folder-open" href="/features/files">
+    Upload and download files efficiently
+  </Card>
+  
+  <Card title="Broadcasting Guide" icon="satellite-dish" href="/features/broadcasting">
+    Send messages to all your users
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/api">
+    Complete API documentation
+  </Card>
+</CardGroup>

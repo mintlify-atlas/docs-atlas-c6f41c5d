@@ -1,0 +1,339 @@
+---
+title: Voice Calls Example
+description: Make and receive Telegram voice calls with audio streaming and file conversion
+---
+
+MadelineProto supports making and receiving Telegram voice calls with full audio streaming capabilities.
+
+## Basic Voice Call
+
+From `bot.php`, here's how to initiate a call:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\RemoteUrl;
+use danog\MadelineProto\VoIP;
+
+#[FilterCommand('call')]
+public function callVoip(Incoming&Message $message): void
+{
+    $this->requestCall($message->senderId)
+         ->play(new RemoteUrl('http://icestreaming.rai.it/1.mp3'));
+}
+```
+
+## Handling Incoming Calls
+
+```php
+#[Handler]
+public function handleIncomingCall(VoIP&Incoming $call): void
+{
+    $call->accept()
+         ->play(new RemoteUrl('http://icestreaming.rai.it/1.mp3'));
+}
+```
+
+<Tip>
+Calls are automatically accepted and start playing audio from the specified source.
+</Tip>
+
+## Playing Audio Files
+
+### Local Files
+
+```php
+use danog\MadelineProto\LocalFile;
+
+private $call;
+
+public function onStart(): void
+{
+    $this->call = $this->requestCall(self::ADMIN)
+                       ->play(new LocalFile('/home/daniil/Music/a.ogg'));
+}
+```
+
+### Remote URLs
+
+```php
+use danog\MadelineProto\RemoteUrl;
+
+$call->play(new RemoteUrl('http://icestreaming.rai.it/1.mp3'));
+```
+
+### Message Media
+
+Play audio files sent in messages:
+
+```php
+#[Handler]
+public function playAudio(Incoming&PrivateMessage&HasAudio $message): void
+{
+    if (!$this->isSelfUser()) {
+        return;
+    }
+    $this->requestCall($message->senderId)
+         ->play($message->media->getStream());
+}
+```
+
+<Note>
+The `HasAudio` filter ensures only messages with audio files trigger this handler.
+</Note>
+
+## Audio File Conversion
+
+From `libtgvoipbot.php` - convert audio files to OGG format for voice calls:
+
+```php
+<?php declare(strict_types=1);
+
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\HasAudio;
+use danog\MadelineProto\EventHandler\SimpleFilter\HasDocument;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\Ogg;
+use danog\MadelineProto\ParseMode;
+use danog\MadelineProto\SimpleEventHandler;
+
+use function Amp\async;
+
+class LibtgvoipEventHandler extends SimpleEventHandler
+{
+    private const ADMIN = 'danogentili';
+    
+    public function getReportPeers(): string
+    {
+        return self::ADMIN;
+    }
+    
+    #[FilterCommand('start')]
+    public function startCmd(Incoming&Message $message): void
+    {
+        $message->reply(
+            message: "This bot can be used to convert files to be played by a @MadelineProto Telegram webradio!".
+            "\n\nSee https://docs.madelineproto.xyz/docs/CALLS.html for more info, and call @magicalcrazypony to hear some nice tunes!".
+            "\n\nSend me an audio file to start.".
+            "\n\nPowered by @MadelineProto, [source code](https://github.com/danog/MadelineProto/blob/v8/examples/libtgvoipbot.php).",
+            parseMode: ParseMode::MARKDOWN
+        );
+    }
+    
+    #[Handler]
+    public function convertCmd((Incoming&Message&HasAudio)|(Incoming&Message&HasDocument) $message): void
+    {
+        $reply = $message->reply("Conversion in progress...");
+        async(function () use ($message, $reply): void {
+            $pipe = self::getStreamPipe();
+            $sink = $pipe->getSink();
+            async(
+                Ogg::convert(...),
+                $message->media->getStream(),
+                $sink
+            )->finally($sink->close(...));
+
+            $this->sendDocument(
+                peer: $message->chatId,
+                file: $pipe->getSource(),
+                fileName: $message->media->fileName.".ogg",
+                replyToMsgId: $message->id
+            );
+        })->finally($reply->delete(...));
+    }
+}
+
+if (!getenv('TOKEN')) {
+    throw new AssertionError("You must define a TOKEN environment variable with the token of the bot!");
+}
+
+LibtgvoipEventHandler::startAndLoopBot($argv[1] ?? 'libtgvoipbot.madeline', getenv('TOKEN'));
+```
+
+## Key Features
+
+### Asynchronous Conversion
+
+```php
+async(function () use ($message, $reply): void {
+    $pipe = self::getStreamPipe();
+    $sink = $pipe->getSink();
+    
+    async(
+        Ogg::convert(...),
+        $message->media->getStream(),
+        $sink
+    )->finally($sink->close(...));
+
+    $this->sendDocument(
+        peer: $message->chatId,
+        file: $pipe->getSource(),
+        fileName: $message->media->fileName.".ogg",
+        replyToMsgId: $message->id
+    );
+})->finally($reply->delete(...));
+```
+
+<Tip>
+The conversion happens asynchronously. The bot sends a "Conversion in progress..." message and deletes it when done.
+</Tip>
+
+### Stream Pipes
+
+```php
+$pipe = self::getStreamPipe();
+$sink = $pipe->getSink();
+$source = $pipe->getSource();
+```
+
+Stream pipes allow you to:
+- Convert audio on-the-fly
+- Send files while still processing
+- Handle large files efficiently
+
+## Union Type Filters
+
+```php
+#[Handler]
+public function convertCmd(
+    (Incoming&Message&HasAudio)|(Incoming&Message&HasDocument) $message
+): void
+```
+
+<Note>
+This handler accepts messages with either audio files OR documents, using PHP 8+ union types.
+</Note>
+
+## Complete Voice Call Flow
+
+### 1. User Sends Audio
+
+```php
+#[Handler]
+public function playAudio(Incoming&PrivateMessage&HasAudio $message): void
+{
+    if (!$this->isSelfUser()) {
+        return;
+    }
+    $this->requestCall($message->senderId)
+         ->play($message->media->getStream());
+}
+```
+
+### 2. Bot Initiates Call
+
+```php
+$call = $this->requestCall($userId);
+```
+
+### 3. Bot Plays Audio
+
+```php
+$call->play($audioSource);
+```
+
+Audio sources can be:
+- `LocalFile` - Local audio files
+- `RemoteUrl` - HTTP/HTTPS audio streams
+- `$media->getStream()` - Telegram message media
+
+## Audio Formats
+
+MadelineProto supports:
+- OGG Opus (recommended for calls)
+- MP3
+- MP4/M4A
+- WAV
+- FLAC
+
+<Tip>
+Use `Ogg::convert()` to convert any audio format to OGG Opus, which is optimized for Telegram calls.
+</Tip>
+
+## Web Radio Example
+
+Create a continuous audio stream:
+
+```php
+public function startWebRadio(): void
+{
+    $playlist = [
+        new RemoteUrl('http://stream1.example.com/radio.mp3'),
+        new RemoteUrl('http://stream2.example.com/music.mp3'),
+    ];
+    
+    $call = $this->requestCall(self::ADMIN);
+    
+    foreach ($playlist as $track) {
+        $call->play($track);
+    }
+}
+```
+
+## Call Control
+
+```php
+// Accept incoming call
+$call->accept();
+
+// Discard call
+$call->discard();
+
+// Check call state
+if ($call->getCallState() === \danog\MadelineProto\VoIP::STATE_READY) {
+    // Call is ready
+}
+```
+
+## Error Handling
+
+```php
+try {
+    $call = $this->requestCall($userId);
+    $call->play(new LocalFile('audio.ogg'));
+} catch (\Exception $e) {
+    $this->logger("Call failed: " . $e->getMessage());
+}
+```
+
+## Requirements
+
+<Note>
+**PHP 8.2.4+ required.** Voice calls use advanced PHP features and require a recent PHP version.
+</Note>
+
+<Note>
+**libtgvoip extension recommended.** For best performance, install the libtgvoip PHP extension. The bot works without it but with reduced quality.
+</Note>
+
+## Running the Conversion Bot
+
+```bash
+TOKEN="your_bot_token" php libtgvoipbot.php
+```
+
+<Tip>
+Set the `TOKEN` environment variable with your bot token from @BotFather.
+</Tip>
+
+## Advanced: Multiple Filters
+
+```php
+#[Handler]
+public function handleMediaMessage(
+    Incoming & Message & (HasAudio | HasDocument | HasVideo) $message
+): void {
+    // Handle any media type
+}
+```
+
+## Next Steps
+
+- See [Secret Chats](/examples/secret-bot) for encrypted calls
+- Check out [Full Bot Example](/examples/full-bot) for more features
+- Learn about [File Downloads](/examples/file-download)
+- Read the [CALLS documentation](https://docs.madelineproto.xyz/docs/CALLS.html)

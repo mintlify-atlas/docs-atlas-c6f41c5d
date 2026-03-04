@@ -1,0 +1,340 @@
+---
+title: Installation
+description: Install MadelineProto via Composer, PHAR, or Docker for your Telegram bot or userbot project
+---
+
+# Installation
+
+MadelineProto offers multiple installation methods to suit different project setups. Choose the method that works best for you.
+
+<Note>
+**Recommended**: Use Composer for production projects. The PHAR method is best for quick testing and prototyping.
+</Note>
+
+## Quick Start (PHAR)
+
+The fastest way to get started is using the PHAR distribution. This method automatically downloads MadelineProto and handles all dependencies.
+
+<Steps>
+  <Step title="Download madeline.php">
+    Create a new PHP file with this code:
+    
+    ```php
+    <?php
+    
+    if (!file_exists('madeline.php')) {
+        copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+    }
+    require 'madeline.php';
+    
+    $MadelineProto = new \danog\MadelineProto\API('session.madeline');
+    $MadelineProto->start();
+    
+    $me = $MadelineProto->getSelf();
+    $MadelineProto->logger($me);
+    ```
+  </Step>
+  
+  <Step title="Run the script">
+    Execute via CLI or browser:
+    
+    ```bash
+    php bot.php
+    ```
+    
+    The script will download MadelineProto automatically on first run.
+  </Step>
+  
+  <Step title="Follow login prompts">
+    Enter your phone number or bot token when prompted. A session file will be created to persist your login.
+  </Step>
+</Steps>
+
+<Warning>
+**Alpha Version Notice**: The PHAR distribution may contain alpha versions. For production, use Composer to install stable releases.
+</Warning>
+
+## Composer Installation (Recommended)
+
+For production projects, install MadelineProto via Composer to get stable versions and better dependency management.
+
+### From Scratch
+
+Starting a new project? Set it up with these commands:
+
+<Steps>
+  <Step title="Create project directory">
+    ```bash
+    mkdir my-telegram-bot
+    cd my-telegram-bot
+    ```
+  </Step>
+  
+  <Step title="Initialize Composer">
+    ```bash
+    composer init --name="myname/mybot" --type=project --require="danog/madelineproto:^8.0"
+    ```
+  </Step>
+  
+  <Step title="Install dependencies">
+    ```bash
+    composer install
+    ```
+  </Step>
+  
+  <Step title="Create your bot file">
+    Create `bot.php`:
+    
+    ```php
+    <?php
+    
+    require 'vendor/autoload.php';
+    
+    use danog\MadelineProto\EventHandler\Attributes\Handler;
+    use danog\MadelineProto\EventHandler\Message;
+    use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+    use danog\MadelineProto\SimpleEventHandler;
+    
+    class MyBot extends SimpleEventHandler
+    {
+        public const ADMIN = "@me"; // Change this!
+        
+        public function getReportPeers()
+        {
+            return [self::ADMIN];
+        }
+        
+        #[Handler]
+        public function handleMessage(Incoming&Message $message): void
+        {
+            $message->reply("Hello from MadelineProto!");
+        }
+    }
+    
+    MyBot::startAndLoop('bot.madeline');
+    ```
+  </Step>
+  
+  <Step title="Run your bot">
+    ```bash
+    php bot.php
+    ```
+  </Step>
+</Steps>
+
+### Add to Existing Project
+
+Already have a Composer project? Just add MadelineProto:
+
+```bash
+composer require danog/madelineproto
+```
+
+Then require the autoloader in your code:
+
+```php
+<?php
+
+require 'vendor/autoload.php';
+
+use danog\MadelineProto\API;
+
+$MadelineProto = new API('session.madeline');
+$MadelineProto->start();
+```
+
+## Docker Installation
+
+MadelineProto provides official Docker images for multiple platforms.
+
+### Supported Platforms
+
+- `linux/amd64`
+- `linux/arm64`
+- `linux/riscv64`
+
+### CLI Bot (Recommended)
+
+<Steps>
+  <Step title="Create bot.php">
+    Create your bot file with event handlers (see examples above).
+  </Step>
+  
+  <Step title="Create Dockerfile">
+    ```dockerfile
+    FROM hub.madelineproto.xyz/danog/madelineproto:latest
+    
+    COPY bot.php /app/
+    
+    CMD ["php", "/app/bot.php"]
+    ```
+  </Step>
+  
+  <Step title="Build and run">
+    ```bash
+    docker build -t my-telegram-bot .
+    docker run -it --name telegram-bot my-telegram-bot
+    ```
+  </Step>
+</Steps>
+
+### Web Docker
+
+For web-based bots served via HTTP:
+
+```dockerfile
+FROM hub.madelineproto.xyz/danog/madelineproto:latest
+
+COPY . /app/
+
+EXPOSE 8080
+
+CMD ["php", "-S", "0.0.0.0:8080", "-t", "/app"]
+```
+
+### Using Databases with Docker
+
+To use MySQL, PostgreSQL, or Redis with Docker, use docker-compose:
+
+```yaml
+version: '3.8'
+services:
+  bot:
+    image: hub.madelineproto.xyz/danog/madelineproto:latest
+    volumes:
+      - ./bot.php:/app/bot.php
+    depends_on:
+      - redis
+    command: php /app/bot.php
+  
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
+```
+
+Then configure Redis in your bot:
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Redis;
+
+$settings = new Settings;
+$settings->setDb(
+    (new Redis)
+        ->setDatabase(0)
+        ->setPassword('your_password')
+);
+
+MyBot::startAndLoop('bot.madeline', $settings);
+```
+
+## Verification
+
+Verify your installation by checking the MadelineProto version:
+
+```php
+<?php
+
+require 'vendor/autoload.php'; // or require 'madeline.php';
+
+use danog\MadelineProto\API;
+
+echo "MadelineProto version: " . API::RELEASE . "\n";
+```
+
+## Version Selection
+
+<Tabs>
+  <Tab title="Composer">
+    ```bash
+    # Latest stable version (recommended)
+    composer require danog/madelineproto
+    
+    # Specific version
+    composer require danog/madelineproto:^8.0
+    
+    # Development version
+    composer require danog/madelineproto:dev-master
+    ```
+  </Tab>
+  
+  <Tab title="PHAR">
+    The PHAR method always downloads the latest available version from `https://phar.madelineproto.xyz/madeline.php`.
+    
+    <Note>
+    PHAR versions may be alpha/beta releases. Check the actual version after download.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Updating
+
+### Composer
+
+```bash
+composer update danog/madelineproto
+```
+
+### PHAR
+
+Delete `madeline.php` and run your script again - it will download the latest version:
+
+```bash
+rm madeline.php
+php bot.php
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Check Requirements" icon="list-check" href="/requirements">
+    Ensure all PHP extensions are installed
+  </Card>
+  
+  <Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+    Build your first bot in minutes
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Installation fails with memory errors">
+    Increase PHP memory limit:
+    
+    ```bash
+    php -d memory_limit=512M composer install
+    ```
+  </Accordion>
+  
+  <Accordion title="Missing PHP extensions">
+    Check [Requirements](/requirements) and install missing extensions. On Ubuntu:
+    
+    ```bash
+    sudo apt install php8.2-mbstring php8.2-xml php8.2-gmp php8.2-curl
+    ```
+  </Accordion>
+  
+  <Accordion title="PHAR download fails">
+    Download manually:
+    
+    ```bash
+    wget https://phar.madelineproto.xyz/madeline.php
+    ```
+    
+    Or use Composer instead for more reliable installation.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+Always verify you're running **PHP 8.2 or higher (64-bit)**. Check with:
+
+```bash
+php -v
+php -r "echo PHP_INT_SIZE * 8 . ' bit';"
+```
+</Warning>

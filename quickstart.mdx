@@ -1,80 +1,506 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Build your first MadelineProto bot in under 5 minutes with this step-by-step guide
 ---
 
-## Get started in three steps
+# Quick Start Guide
 
-Get your documentation site running locally and make your first customization.
+Get a working Telegram bot up and running in minutes. This guide will walk you through creating a simple bot that responds to messages.
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+Before starting, ensure you have:
 
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- PHP 8.2+ (64-bit) installed
+- Basic knowledge of PHP
+- A Telegram account or bot token
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+New to MadelineProto? Check the [Requirements](/requirements) page first to ensure your system is ready.
+</Note>
+
+## Your First Bot
+
+Let's create a simple bot that responds to all incoming messages.
+
+<Steps>
+  <Step title="Create bot.php">
+    Create a new file called `bot.php`:
+    
+    ```php
+    <?php declare(strict_types=1);
+    
+    use danog\MadelineProto\EventHandler\Attributes\Handler;
+    use danog\MadelineProto\EventHandler\Message;
+    use danog\MadelineProto\EventHandler\Plugin\RestartPlugin;
+    use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+    use danog\MadelineProto\SimpleEventHandler;
+    
+    // Load MadelineProto
+    if (file_exists('vendor/autoload.php')) {
+        require_once 'vendor/autoload.php';
+    } else {
+        if (!file_exists('madeline.php')) {
+            copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+        }
+        require_once 'madeline.php';
+    }
+    
+    class MyBot extends SimpleEventHandler
+    {
+        public const ADMIN = "@me"; // Change this to your username!
+        
+        public function getReportPeers()
+        {
+            return [self::ADMIN];
+        }
+        
+        public static function getPlugins(): array
+        {
+            return [
+                RestartPlugin::class, // Enables /restart command
+            ];
+        }
+        
+        #[Handler]
+        public function handleMessage(Incoming&Message $message): void
+        {
+            $message->reply("Hello! You said: " . $message->message);
+        }
+    }
+    
+    MyBot::startAndLoop('bot.madeline');
+    ```
+  </Step>
+  
+  <Step title="Run the bot">
+    Execute the script:
+    
+    ```bash
+    php bot.php
+    ```
+    
+    On first run, you'll be prompted to log in.
+  </Step>
+  
+  <Step title="Login">
+    Choose your login method:
+    
+    <Tabs>
+      <Tab title="Bot Token">
+        Enter your bot token from [@BotFather](https://t.me/BotFather):
+        
+        ```
+        Enter your bot token: 123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11
+        ```
+      </Tab>
+      
+      <Tab title="Phone Number">
+        Enter your phone number with country code:
+        
+        ```
+        Enter your phone number: +1234567890
+        Enter the code you received: 12345
+        ```
+      </Tab>
+    </Tabs>
+    
+    A session file (`bot.madeline`) will be created. Next time you run the bot, it will use this session.
+  </Step>
+  
+  <Step title="Test your bot">
+    Send a message to your bot on Telegram. It should echo your message back!
+  </Step>
+</Steps>
+
+## Adding Commands
+
+Let's enhance the bot with command handling using filters:
+
+```php
+<?php declare(strict_types=1);
+
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\ParseMode;
+
+if (file_exists('vendor/autoload.php')) {
+    require_once 'vendor/autoload.php';
+} else {
+    if (!file_exists('madeline.php')) {
+        copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+    }
+    require_once 'madeline.php';
+}
+
+class CommandBot extends SimpleEventHandler
+{
+    public const ADMIN = "@me";
+    
+    public function getReportPeers()
+    {
+        return [self::ADMIN];
+    }
+    
+    // Handle /start command
+    #[FilterCommand('start')]
+    public function startCommand(Message $message): void
+    {
+        $message->reply(
+            message: "**Welcome to MadelineProto!**\n\nAvailable commands:\n/start - Show this message\n/ping - Check if bot is alive\n/echo <text> - Echo your message",
+            parseMode: ParseMode::MARKDOWN
+        );
+    }
+    
+    // Handle /ping command
+    #[FilterCommand('ping')]
+    public function pingCommand(Message $message): void
+    {
+        $message->reply("Pong! 🏓");
+    }
+    
+    // Handle /echo command with arguments
+    #[FilterCommand('echo')]
+    public function echoCommand(Message $message): void
+    {
+        $args = $message->commandArgs;
+        $message->reply($args[0] ?? 'You did not provide any text!');
+    }
+    
+    // Handle all other incoming messages
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void
+    {
+        // Only respond to non-command messages
+        if (!str_starts_with($message->message, '/')) {
+            $message->reply("I received your message: " . $message->message);
+        }
+    }
+}
+
+CommandBot::startAndLoop('bot.madeline');
+```
+
+## Working with Media
+
+Here's how to handle photos and files:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\HasMedia;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+// Send a photo
+#[FilterCommand('photo')]
+public function sendPhoto(Message $message): void
+{
+    $message->reply(
+        message: "Here's a photo!",
+        media: 'https://example.com/photo.jpg'
+    );
+}
+
+// Handle incoming photos
+#[Handler]
+public function handlePhoto(Incoming&Message&HasMedia $message): void
+{
+    if ($message->media->photo ?? false) {
+        $message->reply("Nice photo! I received it.");
+        
+        // Download the photo
+        $message->media->downloadToDir('/path/to/save/');
+    }
+}
+
+// Get download link for any media
+#[FilterCommand('dl')]
+public function downloadLink(Message $message): void
+{
+    $reply = $message->getReply(Message::class);
+    if (!$reply?->media) {
+        $message->reply("Reply to a media message to get download link!");
+        return;
+    }
+    
+    $reply->reply("Download: " . $reply->media->getDownloadLink());
+}
+```
+
+## Using Filters
+
+MadelineProto offers powerful filtering with PHP attributes and intersection types:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+use danog\MadelineProto\EventHandler\Filter\FilterText;
+use danog\MadelineProto\EventHandler\Message\PrivateMessage;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+use danog\MadelineProto\EventHandler\SimpleFilter\IsReply;
+
+// Match exact text
+#[FilterText('hello')]
+public function greet(Message $message): void
+{
+    $message->reply("Hello there!");
+}
+
+// Match with regex
+#[FilterRegex('/.*(mt?proto)[^.]?.*/i')]
+public function mentionMTProto(Message $message): void
+{
+    $message->reply("Did you mean MadelineProto instead of " . $message->matches[1] . "?");
+}
+
+// Only from admins, in private chats, that are replies
+#[Handler]
+public function adminReply(PrivateMessage&FromAdmin&IsReply $message): void
+{
+    $original = $message->getReply(Message::class);
+    $message->reply("Admin replied to: " . $original->message);
+}
+```
+
+## Background Execution
+
+For production, run your bot in the background:
+
+<Tabs>
+  <Tab title="screen (Simple)">
+    ```bash
+    screen -dmS telegram-bot php bot.php
+    
+    # View logs
+    screen -r telegram-bot
+    
+    # Detach: Press Ctrl+A, then D
+    ```
+  </Tab>
+  
+  <Tab title="systemd (Recommended)">
+    Create `/etc/systemd/system/telegram-bot.service`:
+    
+    ```ini
+    [Unit]
+    Description=Telegram Bot
+    After=network.target
+    
+    [Service]
+    Type=simple
+    User=www-data
+    WorkingDirectory=/var/www/telegram-bot
+    ExecStart=/usr/bin/php bot.php
+    Restart=always
+    RestartSec=10
+    
+    [Install]
+    WantedBy=multi-user.target
+    ```
+    
+    Enable and start:
+    
+    ```bash
+    sudo systemctl enable telegram-bot
+    sudo systemctl start telegram-bot
+    sudo systemctl status telegram-bot
+    ```
+  </Tab>
+  
+  <Tab title="Docker">
+    ```dockerfile
+    FROM hub.madelineproto.xyz/danog/madelineproto:latest
+    
+    COPY bot.php /app/
+    
+    CMD ["php", "/app/bot.php"]
+    ```
+    
+    Build and run:
+    
+    ```bash
+    docker build -t my-bot .
+    docker run -d --name telegram-bot --restart always my-bot
+    ```
+  </Tab>
+</Tabs>
+
+## Complete Example
+
+Here's a fully-featured bot with multiple handlers:
+
+<CodeGroup>
+```php bot.php
+<?php declare(strict_types=1);
+
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Plugin\RestartPlugin;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\ParseMode;
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Logger;
+
+if (file_exists('vendor/autoload.php')) {
+    require_once 'vendor/autoload.php';
+} else {
+    if (!file_exists('madeline.php')) {
+        copy('https://phar.madelineproto.xyz/madeline.php', 'madeline.php');
+    }
+    require_once 'madeline.php';
+}
+
+class MyBot extends SimpleEventHandler
+{
+    public const ADMIN = "@me";
+    private array $stats = [];
+    
+    public function __sleep(): array
+    {
+        return ['stats'];
+    }
+    
+    public function getReportPeers()
+    {
+        return [self::ADMIN];
+    }
+    
+    public static function getPlugins(): array
+    {
+        return [RestartPlugin::class];
+    }
+    
+    public function onStart(): void
+    {
+        $this->logger("Bot started!");
+        $this->sendMessageToAdmins("Bot is now online!");
+    }
+    
+    #[FilterCommand('start')]
+    public function start(Message $message): void
+    {
+        $message->reply(
+            message: "**Welcome to MadelineProto Bot!**\n\nCommands:\n/start - Start\n/ping - Test\n/stats - Statistics",
+            parseMode: ParseMode::MARKDOWN
+        );
+    }
+    
+    #[FilterCommand('ping')]
+    public function ping(Message $message): void
+    {
+        $message->reply("🏓 Pong!");
+    }
+    
+    #[FilterCommand('stats')]
+    public function stats(Message&FromAdmin $message): void
+    {
+        $total = array_sum($this->stats);
+        $message->reply("Total messages handled: " . $total);
+    }
+    
+    #[Handler]
+    public function handleMessage(Incoming&Message $message): void
+    {
+        $chatId = $message->chatId;
+        $this->stats[$chatId] = ($this->stats[$chatId] ?? 0) + 1;
+        
+        if (!str_starts_with($message->message, '/')) {
+            $message->reply("Echo: " . $message->message);
+        }
+    }
+}
+
+$settings = new Settings;
+$settings->getLogger()->setLevel(Logger::LEVEL_VERBOSE);
+
+MyBot::startAndLoop('bot.madeline', $settings);
+```
+</CodeGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Handling Updates" icon="arrows-rotate">
+    Learn about event handlers, filters, and update processing
+  </Card>
+  
+  <Card title="File Operations" icon="file">
+    Upload and download files up to 4GB
+  </Card>
+  
+  <Card title="Database Setup" icon="database">
+    Configure MySQL, PostgreSQL, or Redis for reduced RAM usage
+  </Card>
+  
+  <Card title="API Reference" icon="book">
+    Explore the full MTProto API documentation
+  </Card>
+</CardGroup>
+
+## Common Patterns
+
+<AccordionGroup>
+  <Accordion title="Sending formatted messages">
+    ```php
+    use danog\MadelineProto\ParseMode;
+    
+    $message->reply(
+        message: "**Bold** _italic_ `code`\n[Link](https://example.com)",
+        parseMode: ParseMode::MARKDOWN
+    );
+    
+    // Or HTML
+    $message->reply(
+        message: "<b>Bold</b> <i>italic</i> <code>code</code>",
+        parseMode: ParseMode::HTML
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Working with buttons">
+    ```php
+    $message->reply(
+        message: "Choose an option:",
+        replyMarkup: [
+            'inline_keyboard' => [
+                [
+                    ['text' => 'Button 1', 'callback_data' => 'btn1'],
+                    ['text' => 'Button 2', 'callback_data' => 'btn2'],
+                ],
+                [
+                    ['text' => 'Visit Website', 'url' => 'https://docs.madelineproto.xyz'],
+                ]
+            ]
+        ]
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Getting user information">
+    ```php
+    #[Handler]
+    public function handleMessage(Message $message): void
+    {
+        $userId = $message->senderId;
+        $chatId = $message->chatId;
+        
+        // Get full user info
+        $userInfo = $this->getInfo($userId);
+        
+        // Get current bot info
+        $me = $this->getSelf();
+        
+        $this->logger("User: " . $userInfo['User']['first_name']);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+**Need help?** Join the [MadelineProto support group](https://t.me/pwrtelegramgroup) or check out more examples in the [GitHub repository](https://github.com/danog/MadelineProto/tree/v8/examples).
 </Note>

@@ -1,0 +1,395 @@
+---
+title: Requirements
+description: System requirements and PHP extensions needed to run MadelineProto
+---
+
+# Requirements
+
+MadelineProto has specific system and PHP requirements to ensure optimal performance and compatibility.
+
+## PHP Version
+
+<Warning>
+**PHP 8.2 or higher is required.** MadelineProto will not work with PHP 8.1 or earlier versions.
+</Warning>
+
+### 64-bit Required
+
+MadelineProto requires a **64-bit** version of PHP. Check your PHP version and architecture:
+
+```bash
+php -v
+php -r "echo PHP_INT_SIZE * 8 . ' bit PHP';"
+```
+
+Expected output:
+```
+PHP 8.2.4 (cli) (built: Mar 16 2024 08:40:08) (NTS)
+64 bit PHP
+```
+
+<Note>
+If you see "32 bit PHP", you must install the 64-bit version. MadelineProto will not function correctly on 32-bit PHP.
+</Note>
+
+## Required PHP Extensions
+
+The following PHP extensions are **required** for MadelineProto to function:
+
+<Steps>
+  <Step title="Core Extensions">
+    These extensions are mandatory:
+    
+    - **mbstring** - Multibyte string handling
+    - **xml** - XML parsing
+    - **json** - JSON encoding/decoding
+    - **fileinfo** - File type detection
+    - **dom** - DOM manipulation
+    - **filter** - Data filtering
+    - **hash** - Hashing functions
+    - **zlib** - Compression support
+  </Step>
+</Steps>
+
+### Verify Installed Extensions
+
+Check which extensions are installed:
+
+```bash
+php -m
+```
+
+Or check specific extensions:
+
+```bash
+php -r "echo extension_loaded('mbstring') ? 'mbstring: OK' : 'mbstring: MISSING';"
+php -r "echo extension_loaded('xml') ? 'xml: OK' : 'xml: MISSING';"
+php -r "echo extension_loaded('json') ? 'json: OK' : 'json: MISSING';"
+```
+
+### Install Missing Extensions
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    ```bash
+    sudo apt update
+    sudo apt install php8.2-mbstring php8.2-xml php8.2-json \
+                     php8.2-fileinfo php8.2-dom php8.2-curl \
+                     php8.2-zip php8.2-gmp php8.2-bcmath
+    ```
+  </Tab>
+  
+  <Tab title="CentOS/RHEL">
+    ```bash
+    sudo yum install php82-mbstring php82-xml php82-json \
+                     php82-fileinfo php82-dom php82-gmp
+    ```
+  </Tab>
+  
+  <Tab title="macOS (Homebrew)">
+    ```bash
+    brew install php@8.2
+    brew install gmp
+    ```
+    
+    Most extensions are included by default on macOS.
+  </Tab>
+  
+  <Tab title="Windows">
+    Download PHP 8.2+ from [windows.php.net](https://windows.php.net/download/)
+    
+    Edit `php.ini` and uncomment:
+    ```ini
+    extension=mbstring
+    extension=xml
+    extension=json
+    extension=fileinfo
+    extension=gmp
+    extension=openssl
+    ```
+  </Tab>
+</Tabs>
+
+## Recommended Extensions
+
+These extensions are **optional** but highly recommended for better performance:
+
+<CardGroup cols={2}>
+  <Card title="gmp" icon="rocket">
+    **Highly Recommended**
+    
+    Speeds up authorization and cryptographic operations significantly.
+    
+    ```bash
+    sudo apt install php8.2-gmp
+    ```
+  </Card>
+  
+  <Card title="openssl" icon="lock">
+    **Highly Recommended**
+    
+    Provides faster cryptographic operations.
+    
+    ```bash
+    sudo apt install php8.2-openssl
+    ```
+  </Card>
+  
+  <Card title="uv" icon="bolt">
+    **Performance Boost**
+    
+    Greatly speeds up MadelineProto by providing an efficient event loop.
+    
+    ```bash
+    pecl install uv
+    ```
+  </Card>
+  
+  <Card title="primemodule + FFI" icon="gauge-high">
+    **Maximum Performance**
+    
+    Provides the fastest possible cryptographic operations.
+    
+    See [prime.madelineproto.xyz](https://prime.madelineproto.xyz)
+  </Card>
+</CardGroup>
+
+### Database Extensions (Optional)
+
+For using external databases to reduce RAM usage:
+
+- **pdo** - PDO database abstraction
+- **pdo_mysql** - MySQL support  
+- **pdo_pgsql** - PostgreSQL support
+- **redis** - Redis support
+
+```bash
+# MySQL
+sudo apt install php8.2-mysql
+
+# PostgreSQL  
+sudo apt install php8.2-pgsql
+
+# Redis
+sudo pecl install redis
+```
+
+### Math Extensions (Optional)
+
+Either **gmp** OR **bcmath** is recommended:
+
+```bash
+# GMP (preferred)
+sudo apt install php8.2-gmp
+
+# OR BCMath (slower alternative)
+sudo apt install php8.2-bcmath
+```
+
+## Composer
+
+For installing via Composer (recommended), you need Composer 2.0+:
+
+```bash
+# Check Composer version
+composer --version
+
+# Install Composer
+curl -sS https://getcomposer.org/installer | php
+sudo mv composer.phar /usr/local/bin/composer
+```
+
+## System Requirements
+
+### Memory
+
+- **Minimum**: 128 MB RAM
+- **Recommended**: 256 MB+ RAM
+- **With Database**: Can run with as low as 64 MB when using MySQL/PostgreSQL/Redis
+
+<Note>
+Memory usage depends on your bot's workload. For bots in many groups, consider using a [database backend](https://docs.madelineproto.xyz/docs/DATABASE.html) to reduce RAM usage.
+</Note>
+
+### Disk Space
+
+- **Minimum**: 50 MB free space
+- **Recommended**: 200 MB+ for session files and temporary data
+
+### Network
+
+- Stable internet connection
+- Ability to connect to Telegram servers (ports 80, 443)
+- For MTProxy: Additional port access may be needed
+
+## Platform Support
+
+<Tabs>
+  <Tab title="Linux">
+    **Fully Supported**
+    
+    - Ubuntu 20.04+
+    - Debian 10+
+    - CentOS 8+
+    - Alpine Linux
+    - Any Linux distribution with PHP 8.2+
+    
+    Recommended for production deployments.
+  </Tab>
+  
+  <Tab title="Docker">
+    **Fully Supported**
+    
+    Official images available for:
+    - linux/amd64
+    - linux/arm64  
+    - linux/riscv64
+    
+    ```bash
+    docker pull hub.madelineproto.xyz/danog/madelineproto:latest
+    ```
+  </Tab>
+  
+  <Tab title="macOS">
+    **Supported**
+    
+    Works on macOS 10.15+ with Homebrew PHP 8.2+
+    
+    ```bash
+    brew install php@8.2
+    ```
+  </Tab>
+  
+  <Tab title="Windows">
+    **Limited Support**
+    
+    Works on Windows 10/11 with PHP 8.2+ installed.
+    
+    Linux/Docker recommended for production.
+  </Tab>
+</Tabs>
+
+## Conflicting Packages
+
+<Warning>
+The following packages **must not** be installed as they conflict with MadelineProto:
+</Warning>
+
+- `ext-pthreads` - Conflicts with async operations
+- `krakjoe/pthreads-polyfill` - Not compatible
+
+If you have these installed, remove them:
+
+```bash
+composer remove krakjoe/pthreads-polyfill
+```
+
+## Verification Script
+
+Run this script to check if your system meets all requirements:
+
+```php
+<?php
+
+echo "=== MadelineProto Requirements Check ===\n\n";
+
+// PHP Version
+echo "PHP Version: " . PHP_VERSION;
+if (version_compare(PHP_VERSION, '8.2.0', '>=')) {
+    echo " ✓\n";
+} else {
+    echo " ✗ (8.2+ required)\n";
+}
+
+// 64-bit
+echo "Architecture: " . (PHP_INT_SIZE * 8) . "-bit";
+if (PHP_INT_SIZE === 8) {
+    echo " ✓\n";
+} else {
+    echo " ✗ (64-bit required)\n";
+}
+
+// Required extensions
+echo "\nRequired Extensions:\n";
+$required = ['mbstring', 'xml', 'json', 'fileinfo', 'dom', 'filter', 'hash', 'zlib'];
+foreach ($required as $ext) {
+    echo "  $ext: " . (extension_loaded($ext) ? '✓' : '✗') . "\n";
+}
+
+// Recommended extensions  
+echo "\nRecommended Extensions:\n";
+$recommended = ['gmp', 'openssl', 'uv', 'bcmath', 'ffi'];
+foreach ($recommended as $ext) {
+    echo "  $ext: " . (extension_loaded($ext) ? '✓' : '(not installed)') . "\n";
+}
+
+// Database extensions
+echo "\nDatabase Extensions (optional):\n";
+$database = ['pdo', 'pdo_mysql', 'pdo_pgsql', 'redis'];
+foreach ($database as $ext) {
+    echo "  $ext: " . (extension_loaded($ext) ? '✓' : '(not installed)') . "\n";
+}
+
+echo "\n=== End of Check ===\n";
+```
+
+Save as `check.php` and run:
+
+```bash
+php check.php
+```
+
+## Next Steps
+
+Once your system meets the requirements:
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install MadelineProto via Composer or PHAR
+  </Card>
+  
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first bot in minutes
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="32-bit PHP detected">
+    MadelineProto requires 64-bit PHP. Download and install the 64-bit version:
+    
+    - **Linux**: Use your package manager (apt, yum, etc.)
+    - **Windows**: Download from [windows.php.net](https://windows.php.net/download/) (x64 version)
+    - **macOS**: Use Homebrew `brew install php@8.2`
+  </Accordion>
+  
+  <Accordion title="Extension not found after installation">
+    After installing extensions, restart your web server or PHP-FPM:
+    
+    ```bash
+    # Apache
+    sudo systemctl restart apache2
+    
+    # Nginx + PHP-FPM  
+    sudo systemctl restart php8.2-fpm
+    
+    # Verify extension loaded
+    php -m | grep mbstring
+    ```
+  </Accordion>
+  
+  <Accordion title="GMP/BCMath not available">
+    If you can't install GMP or BCMath, MadelineProto will still work but slower.
+    
+    For best performance, use Docker image which includes all optimizations:
+    
+    ```bash
+    docker pull hub.madelineproto.xyz/danog/madelineproto:latest
+    ```
+  </Accordion>
+</AccordionGroup>
+
+<Note>
+**Performance Tip**: For maximum performance, install the primemodule extension. See [prime.madelineproto.xyz](https://prime.madelineproto.xyz) for installation instructions.
+</Note>

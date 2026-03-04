@@ -1,0 +1,477 @@
+---
+title: Logging Configuration
+description: Configure and customize MadelineProto's logging system for debugging and monitoring
+---
+
+## Overview
+
+MadelineProto includes a comprehensive logging system with multiple output targets, log levels, and customization options. Proper logging configuration is essential for debugging, monitoring, and production deployments.
+
+## Logger Types
+
+MadelineProto supports four logger types:
+
+### Echo Logger (CLI Default)
+
+Outputs logs to stdout/stderr - ideal for CLI applications:
+
+```php
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getLogger()->setType(Logger::LOGGER_ECHO);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### File Logger (Web Default)
+
+Writes logs to a file with automatic rotation:
+
+```php
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::LOGGER_FILE)
+    ->setExtra('logs/madelineproto.log')
+    ->setMaxSize(10 * 1024 * 1024); // 10 MB
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+<Note>
+If the file doesn't end with `.log`, MadelineProto automatically appends it. The directory must exist and be writable.
+</Note>
+
+### Default Logger (Syslog)
+
+Uses PHP's error_log configuration:
+
+```php
+$settings = new Settings;
+$settings->getLogger()->setType(Logger::LOGGER_DEFAULT);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+This respects the `error_log` INI setting and can output to:
+- System log (if `error_log = "syslog"`)
+- Custom log file (if `error_log = "/path/to/file"`)
+- Stderr (if error_log is not set)
+
+### Callable Logger (Custom)
+
+Use a custom callback function for logging:
+
+```php
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::LOGGER_CALLABLE)
+    ->setExtra(function($message, $level) {
+        // Send to external logging service
+        file_put_contents('custom.log', "[$level] $message\n", FILE_APPEND);
+        
+        // Or send to monitoring service
+        if ($level <= Logger::ERROR) {
+            notifyAdmin($message);
+        }
+    });
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+Source: `/home/daytona/workspace/source/src/Logger.php:174-235`
+
+## Log Levels
+
+MadelineProto uses six log levels:
+
+```php
+use danog\MadelineProto\Logger;
+
+Logger::ULTRA_VERBOSE  // 5 - Very detailed debug info
+Logger::VERBOSE        // 4 - Detailed debug info
+Logger::NOTICE         // 3 - Normal significant events
+Logger::WARNING        // 2 - Warning messages
+Logger::ERROR          // 1 - Error messages
+Logger::FATAL_ERROR    // 0 - Fatal errors only
+```
+
+Source: `/home/daytona/workspace/source/src/Logger.php:133-217`
+
+### Configure Log Level
+
+```php
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getLogger()->setLevel(Logger::VERBOSE);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+<Tip>
+**Production**: Use `Logger::WARNING` or `Logger::ERROR`
+
+**Development**: Use `Logger::VERBOSE` or `Logger::ULTRA_VERBOSE`
+</Tip>
+
+### Log Level Behavior
+
+Only messages at or below the configured level are logged:
+
+```php
+// With level set to WARNING (2):
+Logger::log('Fatal error occurred', Logger::FATAL_ERROR);  // ✅ Logged
+Logger::log('Error occurred', Logger::ERROR);              // ✅ Logged  
+Logger::log('Warning message', Logger::WARNING);           // ✅ Logged
+Logger::log('Notice message', Logger::NOTICE);             // ❌ Not logged
+Logger::log('Debug info', Logger::VERBOSE);                // ❌ Not logged
+```
+
+Source: `/home/daytona/workspace/source/src/Logger.php:410-414`
+
+## Configuration Examples
+
+### Production Configuration
+
+```php
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::LOGGER_FILE)
+    ->setExtra('/var/log/telegram-bot/app.log')
+    ->setLevel(Logger::WARNING)
+    ->setMaxSize(50 * 1024 * 1024); // 50 MB before rotation
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### Development Configuration
+
+```php
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::LOGGER_ECHO)
+    ->setLevel(Logger::ULTRA_VERBOSE);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### Docker Configuration
+
+```php
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::LOGGER_ECHO)  // Stdout for Docker logs
+    ->setLevel(Logger::NOTICE);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### Multi-Handler Logging
+
+```php
+use danog\MadelineProto\Logger;
+
+$settings = new Settings;
+$settings->getLogger()
+    ->setType(Logger::LOGGER_CALLABLE)
+    ->setExtra(function($message, $level) {
+        // Write all logs to file
+        error_log("[$level] $message", 3, 'all.log');
+        
+        // Echo errors to console
+        if ($level <= Logger::ERROR) {
+            echo "[ERROR] $message\n";
+        }
+        
+        // Send critical errors to monitoring
+        if ($level == Logger::FATAL_ERROR) {
+            sendToMonitoring($message);
+        }
+    });
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+## File Logger Features
+
+### Automatic Log Rotation
+
+File logger automatically truncates when size limit is reached:
+
+```php
+$settings->getLogger()
+    ->setType(Logger::LOGGER_FILE)
+    ->setExtra('app.log')
+    ->setMaxSize(10 * 1024 * 1024); // 10 MB limit
+```
+
+When the log file exceeds 10 MB:
+1. File is truncated to 0 bytes
+2. Logging continues in the empty file
+3. A log entry is written: `"Automatically truncated logfile to {$maxSize}"`
+
+Source: `/home/daytona/workspace/source/src/Logger.php:286-301`
+
+### Disable Rotation
+
+```php
+$settings->getLogger()->setMaxSize(-1); // Never rotate
+```
+
+<Warning>
+Disabling rotation may cause disk space issues over time. Monitor log file sizes manually or implement external rotation.
+</Warning>
+
+### Manual Truncation
+
+```php
+// Truncate log file manually
+$MadelineProto->getLogger()->truncate();
+```
+
+Source: `/home/daytona/workspace/source/src/Logger.php:357-366`
+
+## Using the Logger
+
+### Static Logging
+
+```php
+use danog\MadelineProto\Logger;
+
+// Log messages from anywhere in your code
+Logger::log('Connection established', Logger::NOTICE);
+Logger::log('User authenticated', Logger::VERBOSE);
+Logger::log('Database query failed', Logger::ERROR);
+Logger::log('Critical system failure', Logger::FATAL_ERROR);
+```
+
+Source: `/home/daytona/workspace/source/src/Logger.php:392-399`
+
+### Instance Logging
+
+```php
+$logger = $MadelineProto->getLogger();
+
+$logger->logger('Processing message', Logger::VERBOSE);
+$logger->logger('Rate limit hit', Logger::WARNING, 'RateLimiter');
+```
+
+### PSR-3 Logger
+
+Get a PSR-3 compatible logger:
+
+```php
+$psrLogger = $MadelineProto->getLogger()->getPsrLogger();
+
+$psrLogger->debug('Debug information');
+$psrLogger->info('Informational message');
+$psrLogger->notice('Normal but significant');
+$psrLogger->warning('Warning condition');
+$psrLogger->error('Error condition');
+$psrLogger->critical('Critical condition');
+$psrLogger->alert('Action must be taken immediately');
+$psrLogger->emergency('System is unusable');
+```
+
+Source: `/home/daytona/workspace/source/src/Logger.php:457-463`
+
+## Log Output Format
+
+### Standard Format
+
+```
+PeerHandler:    Try fetching 12345 with access hash 0
+Connection:     Connected to DC 2
+MTProto:        Received update: updateNewMessage
+```
+
+Format: `{File}{Prefix}:\t{Message}`
+
+Source: `/home/daytona/workspace/source/src/Logger.php:430-433`
+
+### Colored Output (TTY)
+
+When running in a terminal, logs are colored:
+- **Fatal Error**: Red background, bold
+- **Error**: White on red, bold
+- **Warning**: White on red, dim
+- **Notice**: Yellow, bold
+- **Verbose**: Green, bold
+- **Ultra Verbose**: Gray, dim
+
+Source: `/home/daytona/workspace/source/src/Logger.php:273-278`
+
+### Web Output
+
+In web environments (non-CLI), newlines are converted to `<br>` tags:
+
+```php
+// CLI output:
+"Error on line 1\nError on line 2"
+
+// Web output:
+"Error on line 1<br>\nError on line 2<br>\n"
+```
+
+Source: `/home/daytona/workspace/source/src/Logger.php:280-284`
+
+## Advanced Configuration
+
+### Custom Logger Class
+
+Create a custom logger by extending MadelineProto's logger:
+
+```php
+use danog\MadelineProto\Logger;
+use danog\MadelineProto\Settings\Logger as LoggerSettings;
+
+class CustomLogger extends Logger {
+    public function logger(mixed $param, int $level = self::NOTICE, string $file = ''): void {
+        // Add custom processing
+        $timestamp = date('[Y-m-d H:i:s]');
+        $levelName = $this->getLevelName($level);
+        
+        $message = "$timestamp [$levelName] $file: $param";
+        
+        // Call parent or implement custom logic
+        parent::logger($param, $level, $file);
+    }
+    
+    private function getLevelName(int $level): string {
+        return match($level) {
+            self::FATAL_ERROR => 'FATAL',
+            self::ERROR => 'ERROR',
+            self::WARNING => 'WARN',
+            self::NOTICE => 'NOTICE',
+            self::VERBOSE => 'VERBOSE',
+            self::ULTRA_VERBOSE => 'TRACE',
+            default => 'UNKNOWN',
+        };
+    }
+}
+```
+
+### Conditional Logging
+
+```php
+use danog\MadelineProto\Logger;
+
+// Only log in development
+if (getenv('APP_ENV') === 'development') {
+    Logger::log('Debug info: ' . json_encode($data), Logger::VERBOSE);
+}
+
+// Log only specific errors
+if ($error instanceof CriticalException) {
+    Logger::log($error->getMessage(), Logger::FATAL_ERROR);
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Choose Appropriate Log Levels">
+    - Use `FATAL_ERROR` for critical issues requiring immediate attention
+    - Use `ERROR` for errors that should be investigated
+    - Use `WARNING` for potential issues
+    - Use `NOTICE` for significant normal events
+    - Use `VERBOSE`/`ULTRA_VERBOSE` only during development
+  </Accordion>
+
+  <Accordion title="Rotate Logs Regularly">
+    Set appropriate max size for file logger:
+    ```php
+    // Small bots: 5-10 MB
+    $settings->getLogger()->setMaxSize(5 * 1024 * 1024);
+    
+    // Large bots: 50-100 MB
+    $settings->getLogger()->setMaxSize(100 * 1024 * 1024);
+    ```
+  </Accordion>
+
+  <Accordion title="Use Structured Logging">
+    ```php
+    // Instead of:
+    Logger::log('User logged in', Logger::NOTICE);
+    
+    // Better:
+    Logger::log(
+        json_encode([
+            'event' => 'user_login',
+            'user_id' => $userId,
+            'timestamp' => time(),
+        ]),
+        Logger::NOTICE
+    );
+    ```
+  </Accordion>
+
+  <Accordion title="Avoid Logging Sensitive Data">
+    ```php
+    // Never log:
+    Logger::log('Password: ' . $password, Logger::VERBOSE); // ❌
+    Logger::log('API key: ' . $apiKey, Logger::VERBOSE);    // ❌
+    
+    // Instead:
+    Logger::log('User authenticated', Logger::NOTICE);      // ✅
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Logs Not Appearing
+
+1. Check log level is appropriate:
+   ```php
+   $settings->getLogger()->setLevel(Logger::VERBOSE);
+   ```
+
+2. Verify file permissions:
+   ```bash
+   chmod 755 logs/
+   chmod 644 logs/madelineproto.log
+   ```
+
+3. Check file path:
+   ```php
+   $settings->getLogger()->setExtra(__DIR__ . '/logs/app.log');
+   ```
+
+### Log File Too Large
+
+```php
+// Enable automatic rotation
+$settings->getLogger()->setMaxSize(10 * 1024 * 1024);
+
+// Or manually truncate
+$MadelineProto->getLogger()->truncate();
+```
+
+### Performance Issues
+
+Reduce log level in production:
+```php
+$settings->getLogger()->setLevel(Logger::WARNING);
+```
+
+## See Also
+
+- [Error Handling](/guides/error-handling) - Exception logging
+- [Settings](/api/settings/logger) - Logger settings reference
+- [Advanced Settings](/advanced/settings) - All configuration options

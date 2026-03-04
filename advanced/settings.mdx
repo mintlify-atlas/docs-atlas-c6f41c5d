@@ -1,0 +1,352 @@
+---
+title: Settings Configuration
+description: Comprehensive guide to configuring MadelineProto settings
+---
+
+MadelineProto provides extensive configuration options through the `Settings` class. All settings are organized into logical groups for easy management.
+
+## Settings Structure
+
+The main `Settings` class contains sub-settings for different aspects of MadelineProto:
+
+```php
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+
+// Access sub-settings
+$settings->getAppInfo();      // Application information
+$settings->getAuth();         // Cryptography settings
+$settings->getConnection();   // Connection settings
+$settings->getDb();           // Database settings
+$settings->getFiles();        // File management settings
+$settings->getIpc();          // IPC server settings
+$settings->getLogger();       // Logger settings
+$settings->getMetrics();      // Metrics settings
+$settings->getPeer();         // Peer database settings
+$settings->getRpc();          // RPC settings
+$settings->getSecretChats();  // Secret chat settings
+$settings->getSerialization(); // Serialization settings
+$settings->getSchema();       // TL schema settings
+$settings->getTemplates();    // Template settings
+$settings->getVoip();         // VoIP settings
+```
+
+## App Info Settings
+
+Configure your application's API credentials:
+
+```php
+use danog\MadelineProto\Settings\AppInfo;
+
+$appInfo = $settings->getAppInfo();
+$appInfo->setApiId(12345);
+$appInfo->setApiHash('your_api_hash');
+```
+
+<Note>
+  Obtain API credentials from [my.telegram.org](https://my.telegram.org/apps)
+</Note>
+
+## Connection Settings
+
+Configure how MadelineProto connects to Telegram:
+
+```php
+$connection = $settings->getConnection();
+
+// Network settings
+$connection->setTimeout(5.0);        // Connection timeout in seconds
+$connection->setPingInterval(60);    // Ping interval in seconds
+$connection->setRetry(true);         // Whether to retry connections
+$connection->setIpv6(false);         // Use IPv6
+$connection->setUseDoH(true);        // Use DNS over HTTPS
+
+// Test mode
+$connection->setTestMode(false);     // Connect to test DC
+
+// Obfuscation
+$connection->setObfuscated(false);   // Use obfuscated protocol to bypass ISP blocks
+
+// Bind to specific address
+$connection->setBindTo(null);        // e.g., '192.168.1.100:0'
+```
+
+### Protocol Configuration
+
+Choose the MTProto transport protocol:
+
+```php
+use danog\MadelineProto\Stream\MTProtoTransport\AbridgedStream;
+use danog\MadelineProto\Stream\MTProtoTransport\IntermediateStream;
+use danog\MadelineProto\Stream\MTProtoTransport\IntermediatePaddedStream;
+
+// Abridged (lightest, recommended)
+$connection->setProtocol(AbridgedStream::class);
+
+// Intermediate
+$connection->setProtocol(IntermediateStream::class);
+
+// Intermediate with padding (for obfuscation)
+$connection->setProtocol(IntermediatePaddedStream::class);
+```
+
+### Transport Configuration
+
+```php
+use danog\MadelineProto\Stream\Transport\DefaultStream;
+use danog\MadelineProto\Stream\Transport\WsStream;
+use danog\MadelineProto\Stream\Transport\WssStream;
+
+// Default TCP
+$connection->setTransport(DefaultStream::class);
+
+// WebSocket (plain)
+$connection->setTransport(WsStream::class);
+
+// WebSocket (TLS)
+$connection->setTransport(WssStream::class);
+```
+
+<Info>
+  WebSocket transports require obfuscation to be enabled.
+</Info>
+
+### Socket Configuration
+
+```php
+// Maximum media socket count
+$connection->setMaxMediaSocketCount(10);
+
+// Robin period for cycling through DCs
+$connection->setRobinPeriod(10);
+```
+
+## Logger Settings
+
+Configure logging output:
+
+```php
+use danog\MadelineProto\Settings\Logger;
+
+$logger = $settings->getLogger();
+
+// Log level
+$logger->setLevel(Logger::LEVEL_VERBOSE);
+// Available levels:
+// LEVEL_ULTRA_VERBOSE, LEVEL_VERBOSE, LEVEL_NOTICE,
+// LEVEL_WARNING, LEVEL_ERROR, LEVEL_FATAL_ERROR
+
+// Log type
+$logger->setType(Logger::FILE_LOGGER);
+// Available types:
+// FILE_LOGGER, STDOUT_LOGGER, ECHO_LOGGER
+
+// For file logger
+$logger->setExtra('bot.log');
+
+// Maximum log file size (optional)
+$logger->setMaxSize(100 * 1024 * 1024); // 100MB
+```
+
+## RPC Settings
+
+Configure RPC call behavior:
+
+```php
+$rpc = $settings->getRpc();
+
+// RPC timeout
+$rpc->setRpcTimeout(5.0);
+
+// RPC drop timeout (when to drop pending calls)
+$rpc->setRpcDropTimeout(60.0);
+
+// Flood timeout
+$rpc->setFloodTimeout(30);
+```
+
+## Peer Settings
+
+Configure peer caching:
+
+```php
+$peer = $settings->getPeer();
+
+// Cache all peers on startup
+$peer->setCacheAllPeersOnStartup(true);
+
+// Full info cache time
+$peer->setFullInfoCacheTime(3600); // 1 hour
+```
+
+## File Settings
+
+Configure file upload/download behavior:
+
+```php
+$files = $settings->getFiles();
+
+// Upload chunk size (in bytes)
+$files->setUploadChunkSize(128 * 1024); // 128KB
+
+// Download chunk size
+$files->setDownloadChunkSize(1024 * 1024); // 1MB
+
+// Report broken media
+$files->setReportBrokenMedia(true);
+```
+
+## Serialization Settings
+
+Configure session serialization:
+
+```php
+$serialization = $settings->getSerialization();
+
+// Serialization interval (how often to save session)
+$serialization->setInterval(30); // seconds
+
+// Cleanup temporary leftover files
+$serialization->setCleanup(true);
+```
+
+## Complete Configuration Example
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\Settings\Database\Mysql;
+use danog\MadelineProto\Settings\Logger;
+use danog\MadelineProto\Stream\MTProtoTransport\AbridgedStream;
+
+$settings = new Settings;
+
+// App info
+$settings->getAppInfo()
+    ->setApiId(12345)
+    ->setApiHash('your_api_hash');
+
+// Database
+$settings->setDb(
+    (new Mysql)
+        ->setDatabase('MadelineProto')
+        ->setUsername('root')
+        ->setPassword('password')
+);
+
+// Logger
+$settings->getLogger()
+    ->setLevel(Logger::LEVEL_VERBOSE)
+    ->setType(Logger::FILE_LOGGER)
+    ->setExtra('bot.log');
+
+// Connection
+$settings->getConnection()
+    ->setTimeout(5.0)
+    ->setPingInterval(60)
+    ->setProtocol(AbridgedStream::class);
+
+// Peer caching
+$settings->getPeer()
+    ->setCacheAllPeersOnStartup(true);
+
+// Files
+$settings->getFiles()
+    ->setDownloadChunkSize(1024 * 1024);
+
+// Serialization
+$settings->getSerialization()
+    ->setInterval(30)
+    ->setCleanup(true);
+
+// Start bot
+MyEventHandler::startAndLoop('bot.madeline', $settings);
+```
+
+## Merging Settings
+
+You can merge individual setting groups:
+
+```php
+$settings = new Settings;
+
+// Create and configure a specific settings group
+$connection = new \danog\MadelineProto\Settings\Connection;
+$connection->setTimeout(10.0);
+$connection->setIpv6(true);
+
+// Merge into main settings
+$settings->merge($connection);
+```
+
+## Settings Inheritance
+
+All settings classes extend `SettingsAbstract` and support:
+
+- **Fluent interface**: Chain method calls
+- **Merging**: Combine settings from multiple sources
+- **Type safety**: Strict type checking
+
+```php
+// Fluent interface example
+$settings->getConnection()
+    ->setTimeout(5.0)
+    ->setPingInterval(60)
+    ->setRetry(true)
+    ->setIpv6(false);
+```
+
+## Environment-Based Configuration
+
+```php
+$settings = new Settings;
+
+// Configure based on environment
+if (getenv('APP_ENV') === 'production') {
+    $settings->getLogger()
+        ->setLevel(Logger::LEVEL_ERROR)
+        ->setType(Logger::FILE_LOGGER)
+        ->setExtra('/var/log/madelineproto.log');
+} else {
+    $settings->getLogger()
+        ->setLevel(Logger::LEVEL_ULTRA_VERBOSE)
+        ->setType(Logger::ECHO_LOGGER);
+}
+
+// API credentials from environment
+$settings->getAppInfo()
+    ->setApiId((int)getenv('TELEGRAM_API_ID'))
+    ->setApiHash(getenv('TELEGRAM_API_HASH'));
+```
+
+## Settings Validation
+
+MadelineProto validates settings at startup:
+
+- Invalid protocol/transport combinations are rejected
+- Required settings (API ID/hash) must be provided
+- Type mismatches throw exceptions
+
+## Performance Tuning
+
+<CardGroup cols={2}>
+  <Card title="Connection Pool" icon="network-wired">
+    Adjust `maxMediaSocketCount` based on file transfer needs
+  </Card>
+  <Card title="Cache Settings" icon="database">
+    Configure database cache TTL to balance memory and database load
+  </Card>
+  <Card title="Chunk Sizes" icon="file">
+    Optimize upload/download chunk sizes for your network
+  </Card>
+  <Card title="Logging" icon="file-lines">
+    Use appropriate log levels to avoid performance impact
+  </Card>
+</CardGroup>
+
+## See Also
+
+- [Database Configuration](/advanced/database)
+- [Proxy Configuration](/advanced/proxy)
+- [Metrics Configuration](/advanced/metrics)
+- [Quick Start](/quickstart)

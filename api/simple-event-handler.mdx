@@ -1,0 +1,345 @@
+---
+title: SimpleEventHandler
+description: Simplified event handler with filter and cron support
+---
+
+# SimpleEventHandler
+
+SimpleEventHandler extends [EventHandler](/api/event-handler) to provide a more streamlined API with built-in support for filters and scheduled tasks.
+
+## Overview
+
+By extending SimpleEventHandler, you can:
+- Use attribute-based filters for fine-grained update handling
+- Schedule periodic tasks with the `#[Cron]` attribute
+- Write cleaner, more declarative code
+- Handle updates with automatic filtering
+
+## Basic Usage
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Handler]
+    #[Incoming]
+    public function handleMessage(Message $message): void
+    {
+        // Only handles incoming messages
+        $message->reply("You said: {$message->message}");
+    }
+}
+
+MyBot::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+## Filter System
+
+Filters allow you to specify which updates a handler should process using PHP attributes.
+
+### Available Filters
+
+SimpleEventHandler supports various filters from the `SimpleFilter` namespace:
+
+#### Incoming
+
+Only process incoming messages.
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+
+#[Incoming]
+public function onIncoming(Message $message): void
+{
+    // Only incoming messages
+}
+```
+
+#### Outgoing
+
+Only process outgoing messages.
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\Outgoing;
+
+#[Outgoing]
+public function onOutgoing(Message $message): void
+{
+    // Only outgoing messages
+}
+```
+
+#### FromAdmin
+
+Only process messages from administrators.
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+
+#[FromAdmin]
+public function onAdminMessage(Message $message): void
+{
+    // Only messages from admins
+}
+```
+
+#### HasMedia
+
+Only process messages containing media.
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\HasMedia;
+
+#[HasMedia]
+public function onMediaMessage(Message $message): void
+{
+    // Only messages with media
+    $this->logger("Received media: " . get_class($message->media));
+}
+```
+
+### Combining Filters
+
+Multiple filters can be combined on a single handler:
+
+```php
+use danog\MadelineProto\EventHandler\SimpleFilter\Incoming;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+
+#[Incoming]
+#[FromAdmin]
+public function onAdminIncoming(Message $message): void
+{
+    // Only incoming messages from admins
+}
+```
+
+### Regular Expression Filters
+
+Filter messages by regex patterns:
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+
+#[FilterRegex('/^\/start/')]
+public function onStart(Message $message): void
+{
+    // Matches /start command
+    $message->reply("Welcome!");
+}
+
+#[FilterRegex('/hello/i')]
+public function onHello(Message $message): void
+{
+    // Matches messages containing "hello" (case-insensitive)
+    $message->reply("Hi there!");
+}
+```
+
+Access regex matches via the `$matches` property:
+
+```php
+#[FilterRegex('/\/echo (.+)/')]
+public function onEcho(Message $message): void
+{
+    // Extract text after /echo command
+    $text = $message->matches[1] ?? '';
+    $message->reply($text);
+}
+```
+
+## Cron Tasks
+
+Schedule periodic tasks using the `#[Cron]` attribute.
+
+### Basic Cron
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+use danog\Loop\PeriodicLoop;
+
+#[Cron(period: 60.0)] // Run every 60 seconds
+public function checkStatus(PeriodicLoop $loop): void
+{
+    $this->logger("Status check running...");
+    
+    // Return true to stop the loop
+    // return true;
+}
+```
+
+### Cron Parameters
+
+<ParamField path="period" type="float" required>
+  Interval in seconds between executions
+</ParamField>
+
+### Controlling Cron Loops
+
+You can control cron loops programmatically:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+use danog\Loop\PeriodicLoop;
+
+class MyBot extends SimpleEventHandler
+{
+    #[Cron(period: 30.0)]
+    public function periodicTask(PeriodicLoop $loop): bool
+    {
+        $this->logger("Running periodic task");
+        
+        // Return true to stop the loop
+        if ($this->shouldStop) {
+            return true;
+        }
+        
+        return false;
+    }
+    
+    public function stopPeriodicTask(): void
+    {
+        $loop = $this->getPeriodicLoop('periodicTask');
+        if ($loop) {
+            $loop->stop();
+        }
+    }
+}
+```
+
+## Type-Based Filtering
+
+Handlers automatically filter by parameter type:
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\InlineQuery;
+use danog\MadelineProto\EventHandler\CallbackQuery;
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+
+#[Handler]
+public function onMessage(Message $message): void
+{
+    // Only messages
+}
+
+#[Handler]
+public function onInlineQuery(InlineQuery $query): void
+{
+    // Only inline queries
+}
+
+#[Handler]
+public function onCallback(CallbackQuery $query): void
+{
+    // Only callback queries
+}
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\InlineQuery;
+use danog\MadelineProto\EventHandler\Attributes\{Handler, Cron};
+use danog\MadelineProto\EventHandler\SimpleFilter\{Incoming, FromAdmin};
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+use danog\Loop\PeriodicLoop;
+
+class AdvancedBot extends SimpleEventHandler
+{
+    private int $messageCount = 0;
+    
+    public function onStart(): void
+    {
+        $this->logger("Advanced bot started!");
+    }
+    
+    #[FilterRegex('/^\/start/')]
+    #[Incoming]
+    public function handleStart(Message $message): void
+    {
+        $message->reply(
+            "Welcome! Available commands:\n" .
+            "/help - Show help\n" .
+            "/stats - Show statistics\n" .
+            "/admin - Admin panel (admins only)"
+        );
+    }
+    
+    #[FilterRegex('/^\/stats/')]
+    public function handleStats(Message $message): void
+    {
+        $message->reply("Total messages processed: {$this->messageCount}");
+    }
+    
+    #[FilterRegex('/^\/admin/')]
+    #[FromAdmin]
+    public function handleAdmin(Message $message): void
+    {
+        $message->reply("Admin panel access granted.");
+    }
+    
+    #[Handler]
+    #[Incoming]
+    public function countMessages(Message $message): void
+    {
+        $this->messageCount++;
+    }
+    
+    #[Handler]
+    public function handleInlineQuery(InlineQuery $query): void
+    {
+        // Handle inline queries
+        $this->logger("Inline query: {$query->query}");
+    }
+    
+    #[Cron(period: 300.0)] // Every 5 minutes
+    public function saveStats(PeriodicLoop $loop): void
+    {
+        $this->logger("Saving statistics: {$this->messageCount} messages");
+        $this->internalSaveDbProperties();
+    }
+    
+    public function getReportPeers(): string
+    {
+        return '@admin';
+    }
+}
+
+AdvancedBot::startAndLoopBot('bot.madeline', 'YOUR_BOT_TOKEN');
+```
+
+## Advantages Over EventHandler
+
+1. **Declarative Filters**: Use attributes instead of manual if-checks
+2. **Type Safety**: Automatic filtering by parameter types
+3. **Scheduled Tasks**: Built-in cron support
+4. **Cleaner Code**: Less boilerplate, more focused on logic
+5. **Regex Matching**: Easy pattern matching with automatic match extraction
+
+## Requirements
+
+To use filters and cron tasks, you **must** extend `SimpleEventHandler` instead of the base `EventHandler` class.
+
+```php
+// ✅ Correct
+class MyBot extends SimpleEventHandler { }
+
+// ❌ Will throw AssertionError
+class MyBot extends EventHandler {
+    #[Cron(period: 60.0)]
+    public function task(): void { } // Error: extend SimpleEventHandler
+}
+```
+
+## See Also
+
+- [EventHandler](/api/event-handler) - Base event handler
+- [Message Events](/api/events/messages) - Message update handling
+- [Filter Documentation](/concepts/filters) - Advanced filtering

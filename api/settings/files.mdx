@@ -1,0 +1,471 @@
+---
+title: Files Settings
+description: Configure file upload and download settings
+---
+
+# Files Settings
+
+The `Files` class configures how MadelineProto handles file uploads and downloads.
+
+## Overview
+
+```php
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+$settings->getFiles()
+    ->setUploadParallelChunks(20)
+    ->setDownloadParallelChunks(20)
+    ->setAllowAutomaticUpload(true);
+```
+
+## Properties
+
+<ParamField path="allowAutomaticUpload" type="bool" default="true">
+  Whether to automatically upload files from paths in constructors
+</ParamField>
+
+<ParamField path="uploadParallelChunks" type="int" default="20">
+  Number of parallel chunks for file uploads
+</ParamField>
+
+<ParamField path="downloadParallelChunks" type="int" default="20">
+  Number of parallel chunks for file downloads
+</ParamField>
+
+<ParamField path="reportBrokenMedia" type="bool" default="true">
+  Whether to report undownloadable media to Telegram Support Force
+</ParamField>
+
+<ParamField path="downloadLink" type="string|null" default="null">
+  Custom download link URL for CLI bots, used by getDownloadLink
+</ParamField>
+
+## Methods
+
+### setAllowAutomaticUpload
+
+Enable automatic file upload from file paths.
+
+<ParamField path="allowAutomaticUpload" type="bool" required>
+  Enable/disable automatic upload
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getFiles()->setAllowAutomaticUpload(true);
+```
+
+When enabled, you can pass file paths directly:
+
+```php
+// Automatically uploads the file
+$message->reply(
+    message: "Here's your file",
+    file: '/path/to/document.pdf'
+);
+```
+
+### getAllowAutomaticUpload
+
+Get automatic upload setting.
+
+<ResponseField name="return" type="bool">
+  Whether automatic upload is enabled
+</ResponseField>
+
+```php
+$autoUpload = $settings->getFiles()->getAllowAutomaticUpload();
+```
+
+### setUploadParallelChunks
+
+Set number of parallel chunks for uploads.
+
+<ParamField path="uploadParallelChunks" type="int" required>
+  Number of parallel chunks (higher = faster, but more CPU/memory)
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+// Faster uploads with more parallelism
+$settings->getFiles()->setUploadParallelChunks(50);
+
+// Conservative setting for limited resources
+$settings->getFiles()->setUploadParallelChunks(10);
+```
+
+### getUploadParallelChunks
+
+Get upload parallel chunks setting.
+
+<ResponseField name="return" type="int">
+  Number of parallel upload chunks
+</ResponseField>
+
+```php
+$chunks = $settings->getFiles()->getUploadParallelChunks();
+```
+
+### setDownloadParallelChunks
+
+Set number of parallel chunks for downloads.
+
+<ParamField path="downloadParallelChunks" type="int" required>
+  Number of parallel chunks
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+// Faster downloads
+$settings->getFiles()->setDownloadParallelChunks(50);
+
+// Conservative setting
+$settings->getFiles()->setDownloadParallelChunks(10);
+```
+
+### getDownloadParallelChunks
+
+Get download parallel chunks setting.
+
+<ResponseField name="return" type="int">
+  Number of parallel download chunks
+</ResponseField>
+
+```php
+$chunks = $settings->getFiles()->getDownloadParallelChunks();
+```
+
+### setReportBrokenMedia
+
+Set whether to report undownloadable media.
+
+<ParamField path="reportBrokenMedia" type="bool" required>
+  Enable/disable reporting
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+$settings->getFiles()->setReportBrokenMedia(true);
+```
+
+### getReportBrokenMedia
+
+Get broken media reporting setting.
+
+<ResponseField name="return" type="bool">
+  Whether reporting is enabled
+</ResponseField>
+
+```php
+$shouldReport = $settings->getFiles()->getReportBrokenMedia();
+```
+
+### setDownloadLink
+
+Set custom download link URL for CLI bots.
+
+<ParamField path="downloadLink" type="string|null" required>
+  Download link URL or null for auto-generation
+</ParamField>
+
+<ResponseField name="return" type="self">
+  Returns self for method chaining
+</ResponseField>
+
+```php
+// Custom download endpoint
+$settings->getFiles()->setDownloadLink('https://example.com/download');
+
+// Auto-generate download links
+$settings->getFiles()->setDownloadLink(null);
+```
+
+### getDownloadLink
+
+Get download link URL.
+
+<ResponseField name="return" type="string|null">
+  Download link URL or null
+</ResponseField>
+
+```php
+$link = $settings->getFiles()->getDownloadLink();
+```
+
+## Complete Examples
+
+### High-Performance File Handling
+
+```php
+use danog\MadelineProto\Settings;
+use danog\MadelineProto\API;
+
+$settings = new Settings;
+
+// Optimize for speed
+$settings->getFiles()
+    ->setUploadParallelChunks(100)
+    ->setDownloadParallelChunks(100)
+    ->setAllowAutomaticUpload(true)
+    ->setReportBrokenMedia(true);
+
+$MadelineProto = new API('session.madeline', $settings);
+```
+
+### Conservative File Handling
+
+```php
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+
+// Optimize for low resource usage
+$settings->getFiles()
+    ->setUploadParallelChunks(5)
+    ->setDownloadParallelChunks(5)
+    ->setAllowAutomaticUpload(true);
+```
+
+### Custom Download Server
+
+```php
+use danog\MadelineProto\Settings;
+
+$settings = new Settings;
+
+// Set custom download endpoint for web bots
+$settings->getFiles()
+    ->setDownloadLink('https://mybot.example.com/download')
+    ->setDownloadParallelChunks(20);
+```
+
+## Upload Files
+
+### From File Path
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->message === '/document') {
+        // Automatic upload if setAllowAutomaticUpload(true)
+        $message->reply(
+            message: "Here's the document",
+            file: '/path/to/file.pdf'
+        );
+    }
+}
+```
+
+### From URL
+
+```php
+$message->reply(
+    message: "Downloaded from URL",
+    file: 'https://example.com/image.jpg'
+);
+```
+
+### Manual Upload
+
+```php
+// Upload file and get media object
+$media = $this->messages->uploadMedia([
+    'media' => [
+        '_' => 'inputMediaUploadedDocument',
+        'file' => '/path/to/file.pdf',
+        'attributes' => [
+            ['_' => 'documentAttributeFilename', 'file_name' => 'document.pdf']
+        ],
+    ],
+]);
+
+// Send the uploaded media
+$this->messages->sendMedia([
+    'peer' => $peer,
+    'media' => $media,
+    'message' => 'Here is your file',
+]);
+```
+
+## Download Files
+
+### Download Media
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Media\Document;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->media instanceof Document) {
+        // Download to specific path
+        $path = $message->media->download('/downloads/file.pdf');
+        $this->logger("Downloaded to: $path");
+        
+        // Download to temp directory
+        $path = $message->media->download();
+    }
+}
+```
+
+### Get Download Link
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Media\Photo;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->media instanceof Photo) {
+        // Get public download link (for web bots)
+        $link = $message->media->getDownloadLink();
+        $message->reply("Download: $link");
+    }
+}
+```
+
+### Progress Callback
+
+```php
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Media\Document;
+
+public function onUpdateNewMessage(Message $message): void
+{
+    if ($message->media instanceof Document) {
+        $path = $message->media->download(
+            '/downloads/large-file.zip',
+            function (int $downloaded, int $total): void {
+                $percent = ($downloaded / $total) * 100;
+                $this->logger(sprintf(
+                    "Download progress: %.2f%% (%d/%d bytes)",
+                    $percent,
+                    $downloaded,
+                    $total
+                ));
+            }
+        );
+    }
+}
+```
+
+## Performance Tuning
+
+### For Fast Network
+
+```php
+$settings->getFiles()
+    ->setUploadParallelChunks(100)
+    ->setDownloadParallelChunks(100);
+```
+
+**Best for:**
+- Gigabit connections
+- High-performance servers
+- Large file transfers
+
+### For Slow Network
+
+```php
+$settings->getFiles()
+    ->setUploadParallelChunks(10)
+    ->setDownloadParallelChunks(10);
+```
+
+**Best for:**
+- Slow connections
+- Limited bandwidth
+- Shared hosting
+
+### For Limited Resources
+
+```php
+$settings->getFiles()
+    ->setUploadParallelChunks(5)
+    ->setDownloadParallelChunks(5);
+```
+
+**Best for:**
+- Low memory servers
+- Limited CPU
+- Shared hosting with restrictions
+
+## File Size Limits
+
+Telegram has file size limits:
+
+- **Bot API**: 50 MB (upload), 20 MB (download)
+- **MadelineProto**: 2 GB (upload and download)
+
+<Tip>
+MadelineProto uses MTProto directly, allowing files up to 2GB compared to Bot API's 50MB limit.
+</Tip>
+
+## Best Practices
+
+1. **Adjust parallel chunks** based on your server capabilities
+2. **Enable automatic upload** for convenience
+3. **Use progress callbacks** for large files
+4. **Set custom download links** for web-based bots
+5. **Monitor memory usage** when increasing parallel chunks
+6. **Use appropriate chunk counts**:
+   - High performance: 50-100
+   - Medium: 20-30
+   - Low resources: 5-10
+
+## Common Issues
+
+### Out of Memory
+
+Reduce parallel chunks:
+
+```php
+$settings->getFiles()
+    ->setUploadParallelChunks(5)
+    ->setDownloadParallelChunks(5);
+```
+
+### Slow Uploads/Downloads
+
+Increase parallel chunks:
+
+```php
+$settings->getFiles()
+    ->setUploadParallelChunks(50)
+    ->setDownloadParallelChunks(50);
+```
+
+### File Not Found
+
+Check path and permissions:
+
+```php
+$path = '/path/to/file.pdf';
+if (!file_exists($path)) {
+    throw new Exception("File not found: $path");
+}
+if (!is_readable($path)) {
+    throw new Exception("File not readable: $path");
+}
+```
+
+## See Also
+
+- [AppInfo Settings](/api/settings/app-info) - Configure API credentials
+- [Connection Settings](/api/settings/connection) - Connection parameters
+- [Message Events](/api/events/messages) - Handling messages with media

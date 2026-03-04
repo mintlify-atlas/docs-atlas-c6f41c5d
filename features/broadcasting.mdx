@@ -1,0 +1,606 @@
+---
+title: Broadcasting Messages
+description: Efficiently send messages to all users, groups, and channels with MadelineProto's broadcasting system
+---
+
+MadelineProto provides a powerful broadcasting system that allows you to send messages to all peers (users, groups, channels) of your bot or userbot efficiently and reliably.
+
+## Broadcasting Overview
+
+The broadcasting system offers:
+
+- **Parallel execution** - Send to multiple peers simultaneously
+- **Progress tracking** - Monitor broadcast progress in real-time
+- **Filtering** - Target specific peer types
+- **Cancellation** - Stop broadcasts mid-execution
+- **Error handling** - Track successful and failed deliveries
+- **Rate limiting** - Built-in flood wait handling
+
+## Basic Broadcasting
+
+### Broadcast Messages
+
+```php
+use danog\MadelineProto\EventHandler\Filter\FilterCommand;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\SimpleFilter\FromAdmin;
+
+#[FilterCommand('broadcast')]
+public function broadcastCommand(Message & FromAdmin $message): void
+{
+    // Check if replying to a message
+    if (!$message->replyToMsgId) {
+        $message->reply("Reply to the message you want to broadcast.");
+        return;
+    }
+    
+    // Start broadcast
+    $broadcastId = $this->broadcastForwardMessages(
+        from_peer: $message->chatId,
+        message_ids: [$message->replyToMsgId],
+        drop_author: true,  // Don't show original author
+        pin: false          // Don't pin messages
+    );
+    
+    $message->reply("Broadcast started! ID: $broadcastId");
+}
+```
+
+### Broadcast Custom Messages
+
+```php
+public function broadcastAnnouncement(): void
+{
+    // Prepare messages to send
+    $messages = [
+        [
+            'message' => '📢 **Important Announcement**',
+            'parse_mode' => 'markdown',
+        ],
+        [
+            'message' => 'New features are now available!',
+        ],
+    ];
+    
+    // Start broadcast
+    $broadcastId = $this->broadcastMessages(
+        messages: $messages,
+        pin: false,
+        delay: 0.1  // 100ms delay between peers
+    );
+    
+    $this->logger("Broadcast ID: $broadcastId");
+}
+```
+
+## Broadcasting with Filters
+
+Target specific peer types using filters:
+
+```php
+use danog\MadelineProto\Broadcast\Filter;
+
+public function broadcastToUsers(): void
+{
+    // Only to users
+    $filter = new Filter(
+        allowUsers: true,
+        allowBots: false,
+        allowGroups: false,
+        allowChannels: false
+    );
+    
+    $broadcastId = $this->broadcastMessages(
+        messages: [['message' => 'Hello users!']],
+        filter: $filter
+    );
+}
+
+public function broadcastToGroups(): void
+{
+    // Only to groups
+    $filter = new Filter(
+        allowUsers: false,
+        allowBots: false,
+        allowGroups: true,
+        allowChannels: false
+    );
+    
+    $broadcastId = $this->broadcastMessages(
+        messages: [['message' => 'Hello groups!']],
+        filter: $filter
+    );
+}
+
+public function broadcastToChannels(): void
+{
+    // Only to channels
+    $filter = new Filter(
+        allowUsers: false,
+        allowBots: false,
+        allowGroups: false,
+        allowChannels: true
+    );
+    
+    $broadcastId = $this->broadcastMessages(
+        messages: [['message' => 'Hello channels!']],
+        filter: $filter
+    );
+}
+```
+
+### Whitelist and Blacklist
+
+```php
+public function broadcastWithWhitelist(): void
+{
+    // Only send to specific peers
+    $filter = new Filter(
+        allowUsers: true,
+        allowBots: false,
+        allowGroups: true,
+        allowChannels: false,
+        whitelist: [123456, 789012, 345678]  // Peer IDs
+    );
+    
+    $this->broadcastMessages(
+        messages: [['message' => 'Targeted broadcast']],
+        filter: $filter
+    );
+}
+
+public function broadcastWithBlacklist(): void
+{
+    // Exclude specific peers
+    $filter = new Filter(
+        allowUsers: true,
+        allowBots: true,
+        allowGroups: true,
+        allowChannels: true,
+        blacklist: [111111, 222222]  // Blocked peer IDs
+    );
+    
+    $this->broadcastMessages(
+        messages: [['message' => 'Everyone except blacklisted']],
+        filter: $filter
+    );
+}
+```
+
+## Tracking Broadcast Progress
+
+### Manual Progress Polling
+
+```php
+public function monitorBroadcast(int $broadcastId): void
+{
+    while (true) {
+        $progress = $this->getBroadcastProgress($broadcastId);
+        
+        if ($progress === null) {
+            $this->logger("Broadcast not found or completed");
+            break;
+        }
+        
+        $this->logger(
+            "Progress: {$progress->percent}%, " .
+            "Status: {$progress->status->value}, " .
+            "Success: {$progress->successCount}, " .
+            "Failed: {$progress->failCount}, " .
+            "Pending: {$progress->pendingCount}"
+        );
+        
+        if ($progress->status === Status::FINISHED) {
+            break;
+        }
+        
+        sleep(5);  // Poll every 5 seconds
+    }
+}
+```
+
+### Real-Time Progress Updates
+
+Handle broadcast progress updates automatically:
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Handler;
+use danog\MadelineProto\Broadcast\Progress;
+use danog\MadelineProto\Broadcast\Status;
+
+private int $lastLog = 0;
+
+#[Handler]
+public function handleBroadcastProgress(Progress $progress): void
+{
+    // Only log every 5 seconds or when finished
+    if (time() - $this->lastLog > 5 || $progress->status === Status::FINISHED) {
+        $this->lastLog = time();
+        
+        // Send update to admins
+        $this->sendMessageToAdmins((string) $progress);
+        
+        // Log progress
+        $this->logger(
+            "Broadcast {$progress->broadcastId}: " .
+            "{$progress->percent}% complete"
+        );
+    }
+}
+```
+
+## Progress Class
+
+### Progress Properties
+
+```php
+#[Handler]
+public function analyzeProgress(Progress $progress): void
+{
+    $id = $progress->broadcastId;        // Broadcast ID
+    $status = $progress->status;         // Current status
+    $percent = $progress->percent;       // Completion percentage (0-100)
+    $pending = $progress->pendingCount;  // Peers pending
+    $success = $progress->successCount;  // Successful sends
+    $failed = $progress->failCount;      // Failed sends
+    
+    $total = $pending + $success + $failed;
+    
+    $this->logger(
+        "Broadcast $id: $percent% | " .
+        "Sent: $success/$total | " .
+        "Failed: $failed"
+    );
+}
+```
+
+### Broadcast Status
+
+```php
+use danog\MadelineProto\Broadcast\Status;
+
+match($progress->status) {
+    Status::RUNNING => $this->logger("Broadcast in progress"),
+    Status::FINISHED => $this->logger("Broadcast completed"),
+    Status::CANCELLED => $this->logger("Broadcast was cancelled"),
+};
+```
+
+## Cancelling Broadcasts
+
+```php
+public function cancelBroadcast(int $broadcastId): void
+{
+    $this->cancelBroadcast($broadcastId);
+    $this->logger("Broadcast $broadcastId cancelled");
+}
+
+#[FilterCommand('stopbroadcast')]
+public function stopBroadcastCommand(Message & FromAdmin $message): void
+{
+    // Parse broadcast ID from command
+    $args = $message->commandArgs;
+    if (empty($args)) {
+        $message->reply("Usage: /stopbroadcast <id>");
+        return;
+    }
+    
+    $broadcastId = (int)$args[0];
+    $this->cancelBroadcast($broadcastId);
+    
+    $message->reply("Broadcast $broadcastId cancelled.");
+}
+```
+
+## Custom Broadcast Actions
+
+Create custom broadcast actions:
+
+```php
+use danog\MadelineProto\Broadcast\Action;
+use danog\MadelineProto\Broadcast\Filter;
+
+class MyCustomAction implements Action
+{
+    public function __construct(
+        private MyBot $API,
+        private string $customData
+    ) {}
+    
+    public function act(int $peer): void
+    {
+        // Custom action for each peer
+        $this->API->sendMessage(
+            peer: $peer,
+            message: "Custom message: {$this->customData}"
+        );
+    }
+}
+
+// Use custom action
+public function customBroadcast(): void
+{
+    $action = new MyCustomAction($this, "Hello!");
+    
+    $broadcastId = $this->broadcastCustom(
+        action: $action,
+        filter: Filter::default(),
+        delay: 0.1
+    );
+}
+```
+
+## Advanced Examples
+
+### Broadcast with Media
+
+```php
+use danog\MadelineProto\LocalFile;
+
+public function broadcastPhoto(): void
+{
+    // Upload photo once
+    $media = $this->messages->uploadMedia([
+        'peer' => 'me',
+        'media' => [
+            '_' => 'inputMediaUploadedPhoto',
+            'file' => new LocalFile('photo.jpg')
+        ]
+    ]);
+    
+    // Broadcast with uploaded media
+    $messages = [
+        [
+            'media' => $media,
+            'message' => '📸 Check out this photo!',
+        ],
+    ];
+    
+    $this->broadcastMessages($messages);
+}
+```
+
+### Progress Notification Bot
+
+```php
+class BroadcastBot extends SimpleEventHandler
+{
+    private array $broadcasts = [];
+    
+    #[FilterCommand('announce')]
+    public function announce(Message & FromAdmin $message): void
+    {
+        if (!$message->replyToMsgId) {
+            $message->reply("Reply to a message to broadcast it.");
+            return;
+        }
+        
+        // Start broadcast
+        $id = $this->broadcastForwardMessages(
+            from_peer: $message->chatId,
+            message_ids: [$message->replyToMsgId],
+            drop_author: true
+        );
+        
+        // Store status message
+        $statusMsg = $message->reply(
+            "📊 Broadcast started...\n" .
+            "Progress: 0%\n" .
+            "Sent: 0 | Failed: 0 | Pending: ?"
+        );
+        
+        $this->broadcasts[$id] = [
+            'status_msg' => $statusMsg,
+            'chat_id' => $message->chatId,
+        ];
+    }
+    
+    #[Handler]
+    public function updateProgress(Progress $progress): void
+    {
+        $id = $progress->broadcastId;
+        
+        if (!isset($this->broadcasts[$id])) {
+            return;
+        }
+        
+        $data = $this->broadcasts[$id];
+        
+        // Update status message
+        $status = match($progress->status) {
+            Status::RUNNING => "📊 Broadcasting...",
+            Status::FINISHED => "✅ Broadcast Complete!",
+            Status::CANCELLED => "❌ Broadcast Cancelled",
+        };
+        
+        $this->editMessage(
+            peer: $data['chat_id'],
+            id: $data['status_msg']->id,
+            message: "$status\n" .
+                "Progress: {$progress->percent}%\n" .
+                "✅ Sent: {$progress->successCount}\n" .
+                "❌ Failed: {$progress->failCount}\n" .
+                "⏳ Pending: {$progress->pendingCount}"
+        );
+        
+        // Cleanup on finish
+        if ($progress->status === Status::FINISHED) {
+            unset($this->broadcasts[$id]);
+        }
+    }
+}
+```
+
+### Scheduled Broadcasts
+
+```php
+use danog\MadelineProto\EventHandler\Attributes\Cron;
+
+class ScheduledBroadcaster extends SimpleEventHandler
+{
+    // Daily broadcast at specific time
+    #[Cron(period: 3600.0)]  // Check every hour
+    public function dailyBroadcast(): void
+    {
+        $hour = (int)date('H');
+        
+        // Broadcast at 9 AM
+        if ($hour === 9) {
+            $this->broadcastMessages([
+                [
+                    'message' => "🌅 Good morning! Daily update:",
+                ],
+                [
+                    'message' => $this->getDailyContent(),
+                ],
+            ]);
+        }
+    }
+    
+    private function getDailyContent(): string
+    {
+        return "Today's date: " . date('Y-m-d');
+    }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Rate Limiting">
+    MadelineProto handles rate limiting automatically, but you can add delays:
+    
+    ```php
+    $this->broadcastMessages(
+        messages: $messages,
+        delay: 0.1  // 100ms between peers
+    );
+    ```
+  </Accordion>
+  
+  <Accordion title="Flood Prevention">
+    Avoid flooding by:
+    - Not broadcasting too frequently
+    - Using appropriate delays
+    - Filtering recipients
+    - Monitoring failed sends
+  </Accordion>
+  
+  <Accordion title="Progress Monitoring">
+    Always monitor broadcast progress:
+    - Use event handlers for real-time updates
+    - Log successful and failed sends
+    - Notify admins on completion
+  </Accordion>
+  
+  <Accordion title="Media Optimization">
+    Upload media once before broadcasting:
+    
+    ```php
+    // Upload media to "me" first
+    $media = $this->messages->uploadMedia([
+        'peer' => 'me',
+        'media' => ['_' => 'inputMediaUploadedPhoto', 'file' => $file]
+    ]);
+    
+    // Then broadcast
+    $this->broadcastMessages([['media' => $media]]);
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Filter Class Reference
+
+```php
+use danog\MadelineProto\Broadcast\Filter;
+
+new Filter(
+    allowUsers: bool,      // Include users
+    allowBots: bool,       // Include bots
+    allowGroups: bool,     // Include groups
+    allowChannels: bool,   // Include channels
+    blacklist: array,      // Exclude these peer IDs
+    whitelist: array|null  // Only include these peer IDs (null = all)
+);
+
+// Default filter (all peers)
+Filter::default();
+```
+
+## Complete Broadcasting Example
+
+```php
+use danog\MadelineProto\SimpleEventHandler;
+use danog\MadelineProto\Broadcast\Progress;
+use danog\MadelineProto\Broadcast\Status;
+use danog\MadelineProto\Broadcast\Filter;
+
+class BroadcastManager extends SimpleEventHandler
+{
+    public const ADMIN = "@admin";
+    
+    public function getReportPeers() {
+        return [self::ADMIN];
+    }
+    
+    #[FilterCommand('broadcast')]
+    public function broadcast(Message & FromAdmin $message): void
+    {
+        if (!$message->replyToMsgId) {
+            $message->reply("Reply to the message you want to broadcast.");
+            return;
+        }
+        
+        // Start broadcast to all users only
+        $filter = new Filter(
+            allowUsers: true,
+            allowBots: false,
+            allowGroups: false,
+            allowChannels: false
+        );
+        
+        $id = $this->broadcastForwardMessages(
+            from_peer: $message->chatId,
+            message_ids: [$message->replyToMsgId],
+            drop_author: true,
+            filter: $filter,
+            pin: false,
+            delay: 0.1
+        );
+        
+        $message->reply(
+            "✅ Broadcast started!\n" .
+            "ID: $id\n" .
+            "Use /cancel $id to stop."
+        );
+    }
+    
+    private int $lastLog = 0;
+    
+    #[Handler]
+    public function trackProgress(Progress $progress): void
+    {
+        // Log every 5 seconds or on finish
+        if (time() - $this->lastLog > 5 || 
+            $progress->status === Status::FINISHED) {
+            
+            $this->lastLog = time();
+            $this->sendMessageToAdmins((string) $progress);
+        }
+    }
+    
+    #[FilterCommand('cancel')]
+    public function cancelCmd(Message & FromAdmin $message): void
+    {
+        $args = $message->commandArgs;
+        if (empty($args)) {
+            $message->reply("Usage: /cancel <broadcast_id>");
+            return;
+        }
+        
+        $id = (int)$args[0];
+        $this->cancelBroadcast($id);
+        $message->reply("Cancelled broadcast $id");
+    }
+}
+```

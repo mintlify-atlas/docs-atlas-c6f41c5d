@@ -1,0 +1,504 @@
+---
+title: Channel Methods
+description: Methods for managing channels and supergroups
+---
+
+# Channel Methods
+
+The `channels` namespace provides methods for creating and managing Telegram channels and supergroups.
+
+## Accessing Channel Methods
+
+```php
+// In EventHandler
+$this->channels->createChannel([...]);
+
+// In API instance
+$MadelineProto->channels->createChannel([...]);
+```
+
+## Creating Channels
+
+### createChannel
+
+Create a new channel or supergroup.
+
+<ParamField path="title" type="string" required>
+  Channel title
+</ParamField>
+
+<ParamField path="about" type="string" default="">
+  Channel description
+</ParamField>
+
+<ParamField path="megagroup" type="bool" default="false">
+  Create as supergroup instead of channel
+</ParamField>
+
+<ParamField path="broadcast" type="bool" default="true">
+  Create as broadcast channel (true) or discussion group (false)
+</ParamField>
+
+```php
+// Create channel
+$channel = $this->channels->createChannel([
+    'title' => 'My Channel',
+    'about' => 'This is my awesome channel',
+    'megagroup' => false,
+    'broadcast' => true,
+]);
+
+// Create supergroup
+$supergroup = $this->channels->createChannel([
+    'title' => 'My Supergroup',
+    'about' => 'Public discussion group',
+    'megagroup' => true,
+]);
+```
+
+## Getting Channel Information
+
+### getFullChannel
+
+Get full channel information.
+
+<ParamField path="channel" type="string|int" required>
+  Channel username or ID
+</ParamField>
+
+```php
+$channelInfo = $this->channels->getFullChannel([
+    'channel' => '@mychannel',
+]);
+
+// Access channel data
+$about = $channelInfo['full_chat']['about'];
+$participantsCount = $channelInfo['full_chat']['participants_count'];
+$onlineCount = $channelInfo['full_chat']['online_count'];
+```
+
+### getChannels
+
+Get channel information by IDs.
+
+<ParamField path="id" type="array" required>
+  Array of channel IDs or usernames
+</ParamField>
+
+```php
+$channels = $this->channels->getChannels([
+    'id' => ['@channel1', '@channel2'],
+]);
+```
+
+## Editing Channels
+
+### editTitle
+
+Edit channel title.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  New title
+</ParamField>
+
+```php
+$this->channels->editTitle([
+    'channel' => $channelId,
+    'title' => 'New Channel Title',
+]);
+```
+
+### editAbout
+
+Edit channel description.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="about" type="string" required>
+  New description
+</ParamField>
+
+```php
+$this->channels->editAbout([
+    'channel' => $channelId,
+    'about' => 'Updated channel description',
+]);
+```
+
+### editPhoto
+
+Edit channel photo.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="photo" type="array" required>
+  Photo file
+</ParamField>
+
+```php
+$this->channels->editPhoto([
+    'channel' => $channelId,
+    'photo' => [
+        '_' => 'inputChatUploadedPhoto',
+        'file' => '/path/to/photo.jpg',
+    ],
+]);
+```
+
+### editUsername
+
+Set or change channel username.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="username" type="string" required>
+  New username (without @)
+</ParamField>
+
+```php
+$this->channels->editUsername([
+    'channel' => $channelId,
+    'username' => 'mynewchannel',
+]);
+```
+
+## Joining and Leaving
+
+### joinChannel
+
+Join a channel.
+
+<ParamField path="channel" type="string|int" required>
+  Channel username or ID
+</ParamField>
+
+```php
+$this->channels->joinChannel([
+    'channel' => '@publicchannel',
+]);
+```
+
+### leaveChannel
+
+Leave a channel.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+```php
+$this->channels->leaveChannel([
+    'channel' => $channelId,
+]);
+```
+
+## Managing Participants
+
+### getParticipants
+
+Get channel participants.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="filter" type="array" required>
+  Participant filter
+</ParamField>
+
+<ParamField path="offset" type="int" default="0">
+  Offset for pagination
+</ParamField>
+
+<ParamField path="limit" type="int" default="200">
+  Number of participants (max 200)
+</ParamField>
+
+```php
+// Get all participants
+$participants = $this->channels->getParticipants([
+    'channel' => $channelId,
+    'filter' => ['_' => 'channelParticipantsRecent'],
+    'offset' => 0,
+    'limit' => 200,
+]);
+
+// Get administrators
+$admins = $this->channels->getParticipants([
+    'channel' => $channelId,
+    'filter' => ['_' => 'channelParticipantsAdmins'],
+    'limit' => 200,
+]);
+
+// Get kicked users
+$kicked = $this->channels->getParticipants([
+    'channel' => $channelId,
+    'filter' => ['_' => 'channelParticipantsKicked'],
+    'limit' => 200,
+]);
+
+// Get bots
+$bots = $this->channels->getParticipants([
+    'channel' => $channelId,
+    'filter' => ['_' => 'channelParticipantsBots'],
+    'limit' => 200,
+]);
+```
+
+### inviteToChannel
+
+Invite users to channel.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="users" type="array" required>
+  User IDs to invite
+</ParamField>
+
+```php
+$this->channels->inviteToChannel([
+    'channel' => $channelId,
+    'users' => [$userId1, $userId2],
+]);
+```
+
+### editBanned
+
+Ban or restrict a user.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="participant" type="string|int" required>
+  User to ban/restrict
+</ParamField>
+
+<ParamField path="banned_rights" type="array" required>
+  Rights to restrict
+</ParamField>
+
+```php
+// Ban user permanently
+$this->channels->editBanned([
+    'channel' => $channelId,
+    'participant' => $userId,
+    'banned_rights' => [
+        '_' => 'chatBannedRights',
+        'until_date' => 0, // 0 = forever
+        'view_messages' => true,
+    ],
+]);
+
+// Restrict user (mute)
+$this->channels->editBanned([
+    'channel' => $channelId,
+    'participant' => $userId,
+    'banned_rights' => [
+        '_' => 'chatBannedRights',
+        'until_date' => time() + 3600, // 1 hour
+        'send_messages' => true,
+    ],
+]);
+
+// Unban user
+$this->channels->editBanned([
+    'channel' => $channelId,
+    'participant' => $userId,
+    'banned_rights' => [
+        '_' => 'chatBannedRights',
+        'until_date' => 0,
+    ],
+]);
+```
+
+### editAdmin
+
+Promote or demote admin.
+
+<ParamField path="channel" type="string|int" required>
+  Channel
+</ParamField>
+
+<ParamField path="user_id" type="string|int" required>
+  User to promote/demote
+</ParamField>
+
+<ParamField path="admin_rights" type="array" required>
+  Admin rights
+</ParamField>
+
+<ParamField path="rank" type="string" default="">
+  Admin title
+</ParamField>
+
+```php
+// Promote to admin
+$this->channels->editAdmin([
+    'channel' => $channelId,
+    'user_id' => $userId,
+    'admin_rights' => [
+        '_' => 'chatAdminRights',
+        'change_info' => true,
+        'post_messages' => true,
+        'edit_messages' => true,
+        'delete_messages' => true,
+        'ban_users' => true,
+        'invite_users' => true,
+        'pin_messages' => true,
+        'add_admins' => false,
+        'manage_call' => true,
+    ],
+    'rank' => 'Moderator',
+]);
+
+// Demote admin
+$this->channels->editAdmin([
+    'channel' => $channelId,
+    'user_id' => $userId,
+    'admin_rights' => [
+        '_' => 'chatAdminRights',
+    ],
+    'rank' => '',
+]);
+```
+
+## Deletion
+
+### deleteChannel
+
+Delete a channel.
+
+<ParamField path="channel" type="string|int" required>
+  Channel to delete
+</ParamField>
+
+```php
+$this->channels->deleteChannel([
+    'channel' => $channelId,
+]);
+```
+
+## Complete Example
+
+```php
+use danog\MadelineProto\EventHandler;
+use danog\MadelineProto\EventHandler\Message;
+use danog\MadelineProto\EventHandler\Filter\FilterRegex;
+
+class ChannelManager extends EventHandler
+{
+    #[FilterRegex('/^\/createchannel (.+)/')]
+    public function handleCreateChannel(Message $message): void
+    {
+        $title = $message->matches[1];
+        
+        // Create channel
+        $result = $this->channels->createChannel([
+            'title' => $title,
+            'about' => 'Created via bot',
+            'megagroup' => false,
+        ]);
+        
+        $channelId = $result['chats'][0]['id'];
+        $message->reply("Channel created! ID: $channelId");
+    }
+    
+    #[FilterRegex('/^\/channelinfo @?(\w+)/')]
+    public function handleChannelInfo(Message $message): void
+    {
+        $username = $message->matches[1];
+        
+        try {
+            $info = $this->channels->getFullChannel([
+                'channel' => '@' . $username,
+            ]);
+            
+            $title = $info['chats'][0]['title'];
+            $about = $info['full_chat']['about'];
+            $participants = $info['full_chat']['participants_count'];
+            $online = $info['full_chat']['online_count'] ?? 0;
+            
+            $message->reply(
+                "**Channel Information**\n\n" .
+                "Title: $title\n" .
+                "About: $about\n" .
+                "Participants: $participants\n" .
+                "Online: $online",
+                parseMode: 'Markdown'
+            );
+        } catch (\Exception $e) {
+            $message->reply("Error: " . $e->getMessage());
+        }
+    }
+    
+    #[FilterRegex('/^\/promote (\d+)/')]
+    public function handlePromote(Message $message): void
+    {
+        if (!$message->chatId) {
+            $message->reply("This command must be used in a channel");
+            return;
+        }
+        
+        $userId = (int)$message->matches[1];
+        
+        // Promote to admin
+        $this->channels->editAdmin([
+            'channel' => $message->chatId,
+            'user_id' => $userId,
+            'admin_rights' => [
+                '_' => 'chatAdminRights',
+                'delete_messages' => true,
+                'ban_users' => true,
+                'invite_users' => true,
+                'pin_messages' => true,
+            ],
+            'rank' => 'Admin',
+        ]);
+        
+        $message->reply("User promoted to admin");
+    }
+    
+    #[FilterRegex('/^\/ban (\d+)/')]
+    public function handleBan(Message $message): void
+    {
+        if (!$message->chatId) {
+            $message->reply("This command must be used in a channel");
+            return;
+        }
+        
+        $userId = (int)$message->matches[1];
+        
+        // Ban user
+        $this->channels->editBanned([
+            'channel' => $message->chatId,
+            'participant' => $userId,
+            'banned_rights' => [
+                '_' => 'chatBannedRights',
+                'until_date' => 0,
+                'view_messages' => true,
+            ],
+        ]);
+        
+        $message->reply("User banned");
+    }
+}
+```
+
+## See Also
+
+- [Methods Overview](/api/methods/overview) - All available methods
+- [Message Methods](/api/methods/messages) - Message operations
+- [User Methods](/api/methods/users) - User operations

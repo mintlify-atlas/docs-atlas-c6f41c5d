@@ -1,0 +1,157 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "MadelineProto",
+  "projectDescription": "Async PHP client API for the Telegram MTProto protocol",
+  "theme": "aspen",
+  "primaryColor": "#0088cc",
+  "lightColor": "#54a9eb",
+  "darkColor": "#006699",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "installation",
+              "quickstart",
+              "requirements"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/creating-client",
+              "concepts/login",
+              "concepts/async",
+              "concepts/event-handlers",
+              "concepts/filters",
+              "concepts/updates"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/overview",
+              "features/messages",
+              "features/files",
+              "features/calls",
+              "features/secret-chats",
+              "features/inline-buttons",
+              "features/broadcasting"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/plugins",
+              "advanced/database",
+              "advanced/settings",
+              "advanced/docker",
+              "advanced/metrics",
+              "advanced/proxy"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "guides/chat-info",
+              "guides/dialogs",
+              "guides/error-handling",
+              "guides/flood-wait",
+              "guides/logging"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core Classes",
+            "pages": [
+              "api/api",
+              "api/event-handler",
+              "api/simple-event-handler"
+            ]
+          },
+          {
+            "group": "Event Types",
+            "pages": [
+              "api/events/messages",
+              "api/events/updates",
+              "api/events/inline-query",
+              "api/events/callback-query"
+            ]
+          },
+          {
+            "group": "Settings",
+            "pages": [
+              "api/settings/app-info",
+              "api/settings/connection",
+              "api/settings/database",
+              "api/settings/logger",
+              "api/settings/files"
+            ]
+          },
+          {
+            "group": "MTProto Methods",
+            "pages": [
+              "api/methods/overview",
+              "api/methods/messages",
+              "api/methods/channels",
+              "api/methods/users"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Examples",
+        "groups": [
+          {
+            "group": "Bot Examples",
+            "pages": [
+              "examples/simple-bot",
+              "examples/full-bot",
+              "examples/secret-bot"
+            ]
+          },
+          {
+            "group": "Advanced Examples",
+            "pages": [
+              "examples/file-download",
+              "examples/broadcasting",
+              "examples/voice-calls",
+              "examples/plugins"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Async PHP API for Telegram MTProto protocol",
+    "Event-driven update handling with filters",
+    "File upload/download up to 4GB with full parallelization",
+    "Secret chats and VoIP calls support",
+    "Plugin system for extensibility",
+    "Multiple database backends (MySQL, PostgreSQL, Redis)",
+    "Built-in ORM and IPC support",
+    "Prometheus metrics integration",
+    "Docker support with official images"
+  ],
+  "publicApiSurface": [
+    "danog\\MadelineProto\\API",
+    "danog\\MadelineProto\\SimpleEventHandler",
+    "danog\\MadelineProto\\EventHandler",
+    "danog\\MadelineProto\\Settings\\*",
+    "messages.sendMessage",
+    "messages.getDialogs",
+    "channels.joinChannel",
+    "users.getFullUser",
+    "upload.getFile",
+    "download.toDirectory"
+  ]
+}
